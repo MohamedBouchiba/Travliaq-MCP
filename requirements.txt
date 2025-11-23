@@ -2,3 +2,4 @@ fastmcp
 requests
 mangum
 uvicorn
+Pillow
