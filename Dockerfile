@@ -1,12 +1,21 @@
+# Build stage
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Final stage
 FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
+COPY --from=builder /install /usr/local
 COPY . .
 
-# Assuming the app runs with uvicorn or similar based on main_http.py
-# Adjust the command if it's a different entrypoint
 CMD ["python", "main_http.py"]

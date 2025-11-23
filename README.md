@@ -17,3 +17,15 @@ python main_http.py
 # CrewAI
 # Ajouter l’URL du serveur dans la config d’agent (transport streamable-http) :
 # mcps: ["https://<id>.lambda-url.<region>.on.aws/mcp"]
+
+# Accès via UI (MCP Inspector)
+# Vous pouvez utiliser l'inspecteur MCP pour tester et interagir avec le serveur déployé via une interface graphique.
+# 
+# 1. Assurez-vous d'avoir Node.js installé.
+# 2. Lancez l'inspecteur en pointant vers l'URL de production (endpoint SSE) :
+# 
+# ```bash
+# npx @modelcontextprotocol/inspector https://travliaq-mcp-production.up.railway.app/mcp
+# ```
+#
+# Cela ouvrira une interface web locale connectée à votre serveur distant.
