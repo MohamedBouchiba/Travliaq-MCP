@@ -128,6 +128,9 @@ def create_mcp() -> FastMCP:
             style_preset=style_preset,
         )
 
+    from .resources import register_resources
+    register_resources(mcp)
+
     return mcp
 
 
