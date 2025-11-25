@@ -4,8 +4,12 @@ from typing import List
 from fastmcp import FastMCP
 
 # Configuration
+# Configuration
 # On pourrait déplacer ça dans des variables d'env ou config
-ROOT_DIR = Path("e:/CrewTravliaq")
+# En prod (Docker), le code est dans /app, donc on scanne /app ou un sous-dossier
+# En local, on peut vouloir scanner tout le repo
+default_root = Path("/app") if os.path.exists("/app") else Path("e:/CrewTravliaq")
+ROOT_DIR = Path(os.getenv("MCP_RESOURCES_ROOT", default_root))
 IGNORE_DIRS = {
     ".git",
     ".venv",
