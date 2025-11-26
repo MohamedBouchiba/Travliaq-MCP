@@ -5,24 +5,17 @@ from fastmcp import FastMCP
 
 # Configuration
 # Configuration
-# On pourrait déplacer ça dans des variables d'env ou config
-# En prod (Docker), le code est dans /app, donc on scanne /app ou un sous-dossier
-# En local, on peut vouloir scanner tout le repo
-default_root = Path("/app") if os.path.exists("/app") else Path("e:/CrewTravliaq")
-ROOT_DIR = Path(os.getenv("MCP_RESOURCES_ROOT", default_root))
+# On cible uniquement le dossier knowledge-base situé à côté de ce script
+# Structure: src/mcp_server/resources.py -> src/mcp_server/knowledge-base/
+KB_DIR = Path(__file__).parent / "knowledge-base"
+
 IGNORE_DIRS = {
     ".git",
     ".venv",
     ".idea",
     "__pycache__",
-    "node_modules",
-    "dist",
-    "build",
-    "output",
-    "coverage",
     ".pytest_cache",
     ".mypy_cache",
-    "site-packages",
 }
 INCLUDE_EXTENSIONS = {".md", ".txt"}
 
@@ -38,13 +31,13 @@ def _is_ignored(path: Path) -> bool:
 def register_resources(mcp: FastMCP) -> None:
     """Scanne et enregistre les fichiers de documentation comme ressources MCP."""
     
-    # On scanne récursivement ROOT_DIR
-    # Attention: sur un gros repo ça peut être long, ici on suppose une taille raisonnable
-    # ou on cible des dossiers spécifiques si besoin (ex: ROOT_DIR / "docs")
+    if not KB_DIR.exists():
+        print(f"Warning: Knowledge base directory not found at {KB_DIR}")
+        return
+
+    print(f"Scanning resources in {KB_DIR}...")
     
-    print(f"Scanning resources in {ROOT_DIR}...")
-    
-    for root, dirs, files in os.walk(ROOT_DIR):
+    for root, dirs, files in os.walk(KB_DIR):
         # Filtrage des dossiers in-place pour os.walk
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
         
@@ -63,7 +56,7 @@ def register_resources(mcp: FastMCP) -> None:
                 
                 # Description (optionnel, on met le chemin relatif)
                 try:
-                    rel_path = file_path.relative_to(ROOT_DIR)
+                    rel_path = file_path.relative_to(KB_DIR)
                 except ValueError:
                     rel_path = file_path
                 
