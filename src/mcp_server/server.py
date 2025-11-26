@@ -1,4 +1,5 @@
 from typing import Dict, Any, List, Optional, Literal
+from pathlib import Path
 from fastmcp import FastMCP
 from .tools import weather as w
 from .tools import image_generation as imgs
@@ -127,6 +128,23 @@ def create_mcp() -> FastMCP:
             seed=seed,
             style_preset=style_preset,
         )
+
+    @mcp.tool(name="debug.ls")
+    def debug_ls(path: str = ".") -> str:
+        """Liste les fichiers dans un dossier (pour debug)."""
+        import os
+        try:
+            p = Path(path).resolve()
+            if not p.exists():
+                return f"Path not found: {p}"
+            
+            lines = [f"Listing {p}:"]
+            for item in p.iterdir():
+                type_char = "D" if item.is_dir() else "F"
+                lines.append(f"[{type_char}] {item.name}")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"Error: {e}"
 
     from .resources import register_resources
     register_resources(mcp)
