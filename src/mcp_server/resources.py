@@ -70,28 +70,18 @@ def register_resources(mcp: FastMCP) -> None:
                 description = f"Documentation file: {rel_path}"
 
                 # Enregistrement de la ressource
-                # FastMCP gère la lecture via le décorateur ou on peut passer une fonction
-                # Ici on utilise une closure pour capturer le path
+                # FastMCP gère la lecture via le décorateur.
+                # Pour éviter que FastMCP ne pense que c'est un template (à cause d'arguments),
+                # on définit une fonction sans argument qui capture les variables via une factory.
                 
-                @mcp.resource(uri=uri, name=name, description=description)
-                def read_file(uri: str = uri) -> str:
-                    """Lit le contenu du fichier de documentation."""
-                    # On extrait le path de l'URI si besoin, mais ici on a capturé file_path
-                    # Attention: l'argument uri est passé par FastMCP lors de l'appel
-                    # Il faut parser l'URI pour retrouver le fichier si on n'utilise pas la closure directement
-                    # Mais FastMCP semble matcher l'URI.
-                    # Pour être sûr, on re-parse l'URI ou on utilise le path capturé.
-                    # Le path capturé est plus sûr ici car 'read_file' est défini pour CETTE ressource.
-                    
-                    # Petit hack: pour éviter des soucis de closure dans la boucle, 
-                    # on peut utiliser un default argument ou une factory.
-                    # FastMCP enregistre la fonction.
-                    
-                    # Re-parsing propre de l'URI pour la sécurité (vérifier que c'est bien ce fichier)
-                    path_str = uri.replace("file:///", "")
-                    p = Path(path_str)
-                    if not p.exists():
-                        return f"Error: File not found at {p}"
-                    return p.read_text(encoding="utf-8", errors="replace")
+                def make_reader(p: Path):
+                    def read_content() -> str:
+                        """Lit le contenu du fichier."""
+                        if not p.exists():
+                            return f"Error: File not found at {p}"
+                        return p.read_text(encoding="utf-8", errors="replace")
+                    return read_content
+
+                mcp.resource(uri=uri, name=name, description=description)(make_reader(file_path))
 
     print("Resources registration complete.")
