@@ -1,31 +1,43 @@
 # Démarrage local
-python -m venv .venv && . .venv/Scripts/activate  # Windows ; ou source .venv/bin/activate
+
+python -m venv .venv && . .venv/Scripts/activate # Windows ; ou source .venv/bin/activate
 pip install -r requirements.txt
 python main_http.py
-# Tester : http://127.0.0.1:8000/mcp (endpoint MCP)
+
+# Tester : http://127.0.0.1:8000 (endpoint SSE à la racine)
 
 # Déploiement AWS Lambda (ZIP rapide)
-# 1) Construire un ZIP avec dépendances
-#   Windows PowerShell:
-#     python -m pip install -r requirements.txt -t build/
-#     Copy-Item -Recurse src main_http.py lambda_handler.py build/
-#     Compress-Archive -Path build/* -DestinationPath deploy.zip
-# 2) Console AWS → Lambda → Create function (Python 3.12) → Upload zip (deploy.zip)
-# 3) Configuration → Function URL (Auth: AWS_IAM recommandé) → tester GET/POST sur /mcp
-#    URL finale: https://<id>.lambda-url.<region>.on.aws/mcp
+
+# Note: Lambda nécessite une configuration différente pour SSE.
+
+# Pour SSE, préférer un déploiement conteneurisé (Railway, Render, Fly.io)
 
 # CrewAI
-# Ajouter l’URL du serveur dans la config d’agent (transport streamable-http) :
-# mcps: ["https://<id>.lambda-url.<region>.on.aws/mcp"]
+
+# Ajouter l'URL du serveur dans la config d'agent (transport SSE) :
+
+# L'URL pointe vers l'endpoint SSE
+
+# Dans pipeline.py: MCP_SERVER_URL = "https://travliaq-mcp-production.up.railway.app/sse"
 
 # Accès via UI (MCP Inspector)
+
 # Vous pouvez utiliser l'inspecteur MCP pour tester et interagir avec le serveur déployé via une interface graphique.
-# 
-# 1. Assurez-vous d'avoir Node.js installé.
-# 2. Lancez l'inspecteur en pointant vers l'URL de production (endpoint SSE) :
-# 
-# ```bash
-# npx @modelcontextprotocol/inspector https://travliaq-mcp-production.up.railway.app/mcp
-# ```
+
 #
+
+# 1. Assurez-vous d'avoir Node.js installé.
+
+# 2. Lancez l'inspecteur en pointant vers l'URL de production (endpoint SSE) :
+
+#
+
+# ```bash
+
+# npx @modelcontextprotocol/inspector https://travliaq-mcp-production.up.railway.app/sse
+
+# ```
+
+#
+
 # Cela ouvrira une interface web locale connectée à votre serveur distant.
