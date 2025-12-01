@@ -426,24 +426,42 @@ def create_mcp() -> FastMCP:
     async def flights_prices(
         origin: str,
         destination: str,
-        months_ahead: int = 3,
-        headless: bool = True,
+        start_date: str,
+        end_date: str,
+        force_refresh: bool = False,
         ctx: Context = None
     ) -> Dict[str, Any]:
-        """Get flight prices from Google Flights calendar."""
+        """
+        Scrape les prix des vols sur Google Flights pour une période donnée.
+        
+        Args:
+            origin: Code IATA de l'aéroport de départ (ex: "CDG").
+            destination: Code IATA de l'aéroport d'arrivée (ex: "JFK").
+            start_date: Date de début de recherche (YYYY-MM-DD).
+            end_date: Date de fin de recherche (YYYY-MM-DD).
+            force_refresh: Forcer le re-scraping même si en cache (défaut: False).
+            
+        Returns:
+            Dictionnaire contenant:
+            - stats: {min, max, avg, count}
+            - prices: Dictionnaire {date: prix} pour chaque jour trouvé.
+            - from_cache: bool - Si les données viennent du cache
+        """
         try:
             if ctx:
-                await ctx.info(f"Scraping flight prices from {origin} to {destination} for {months_ahead} months")
+                await ctx.info(f"Scraping flight prices from {origin} to {destination} ({start_date} to {end_date})")
             
             result = await f.get_flight_prices(
                 origin=origin,
                 destination=destination,
-                months_ahead=months_ahead,
-                headless=headless
+                start_date=start_date,
+                end_date=end_date,
+                force_refresh=force_refresh
             )
             
             if ctx:
-                await ctx.info("Flight prices retrieved")
+                price_count = len(result.get('prices', {}))
+                await ctx.info(f"Found {price_count} flight prices")
             
             return result
         except Exception as e:

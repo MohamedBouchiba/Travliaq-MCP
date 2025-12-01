@@ -1,68 +1,59 @@
-import sys
+"""
+MCP Tool wrapper for Travliaq Google Flights Scrapper API.
+Uses HTTP calls to the deployed Railway API instead of direct code imports.
+"""
+import httpx
+from typing import Dict, Any
+from datetime import datetime, timedelta
 import os
-from pathlib import Path
-import asyncio
-from typing import Optional, Dict, Any
 
-# Add Google Flights Scrapper to path
-CURRENT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = CURRENT_DIR.parent.parent.parent.parent
-FLIGHTS_SCRAPPER_PATH = PROJECT_ROOT / "Travliaq-Google-Flights-Scrapper"
+# API Base URL - can be overridden via environment variable
+FLIGHTS_API_URL = os.getenv(
+    "FLIGHTS_API_URL",
+    "https://travliaq-google-flights-scrapper-production.up.railway.app"
+)
 
-if str(FLIGHTS_SCRAPPER_PATH) not in sys.path:
-    sys.path.append(str(FLIGHTS_SCRAPPER_PATH))
-
-try:
-    from src.scrapers.calendar_scraper import CalendarScraper
-except ImportError as e:
-    print(f"Warning: Could not import Google Flights Scrapper modules: {e}")
+# Default timeout for HTTP requests (3 minutes)
+DEFAULT_TIMEOUT = 180.0
 
 
 async def get_flight_prices(
     origin: str,
     destination: str,
-    months_ahead: int = 3,
-    headless: bool = True
+    start_date: str,
+    end_date: str,
+    force_refresh: bool = False,
 ) -> Dict[str, Any]:
     """
-    Get flight prices from Google Flights calendar for the next N months.
+    Get flight prices from Google Flights for a specific date range via the REST API.
     
     Args:
-        origin: IATA code for origin airport (e.g. CDG)
-        destination: IATA code for destination airport (e.g. JFK)
-        months_ahead: Number of months to scrape (default: 3)
-        headless: Whether to run browser in headless mode (default: True)
+        origin: IATA code of departure airport (e.g., "CDG")
+        destination: IATA code of arrival airport (e.g., "JFK")
+        start_date: Start date for the search (YYYY-MM-DD)
+        end_date: End date for the search (YYYY-MM-DD)
+        force_refresh: Force re-scraping even if cached data exists (default: False)
+        
+    Returns:
+        Dict containing:
+        - stats: {min, max, avg, count} - Price statistics
+        - prices: Dict[date, price] - Prices for each day in the range
+        - from_cache: bool - Whether data was retrieved from cache
     """
-    try:
-        def _run_scraper():
-            scraper = CalendarScraper(headless=headless)
-            return scraper.scrape(
-                origin=origin,
-                destination=destination,
-                months_ahead=months_ahead
-            )
-
-        # Run synchronous Selenium scraper in a separate thread
-        prices = await asyncio.to_thread(_run_scraper)
-        
-        # Calculate statistics
-        price_values = list(prices.values())
-        stats = {}
-        if price_values:
-            stats = {
-                "min": min(price_values),
-                "max": max(price_values),
-                "avg": sum(price_values) / len(price_values),
-                "count": len(price_values)
-            }
-            
-        return {
-            "origin": origin,
-            "destination": destination,
-            "months_ahead": months_ahead,
-            "stats": stats,
-            "prices": prices # Dict {date: price}
-        }
-        
-    except Exception as e:
-        return {"error": str(e)}
+    # Build query parameters
+    params = {
+        "origin": origin.upper(),
+        "destination": destination.upper(),
+        "start_date": start_date,
+        "end_date": end_date,
+        "force_refresh": force_refresh,
+    }
+    
+    # Make HTTP request
+    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+        response = await client.get(
+            f"{FLIGHTS_API_URL}/api/v1/calendar-prices",
+            params=params
+        )
+        response.raise_for_status()
+        return response.json()

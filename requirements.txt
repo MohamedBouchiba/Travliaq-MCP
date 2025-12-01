@@ -4,15 +4,6 @@ mangum
 uvicorn
 Pillow
 python-dotenv
-# Booking Scrapper dependencies
-playwright
 pydantic
 pydantic-settings
-tenacity
 httpx
-# Google Flights Scrapper dependencies
-selenium
-webdriver-manager
-sqlalchemy
-pandas
-python-dateutil

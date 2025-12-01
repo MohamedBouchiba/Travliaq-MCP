@@ -1,30 +1,19 @@
-import sys
+"""
+MCP Tool wrapper for Travliaq Booking Scrapper API.
+Uses HTTP calls to the deployed Railway API instead of direct code imports.
+"""
+import httpx
+from typing import Dict, Any, List, Optional
 import os
-from pathlib import Path
-import asyncio
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date
 
-# Add Booking Scrapper to path
-# Assuming the directory structure is:
-# e:\CrewTravliaq\Travliaq-MCP\src\mcp_server\tools\booking.py
-# We need to reach e:\CrewTravliaq\Travliaq-Booking-Scrapper
-CURRENT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = CURRENT_DIR.parent.parent.parent.parent  # src -> mcp_server -> tools -> booking.py -> ...
-BOOKING_SCRAPPER_PATH = PROJECT_ROOT / "Travliaq-Booking-Scrapper"
+# API Base URL - can be overridden via environment variable
+BOOKING_API_URL = os.getenv(
+    "BOOKING_API_URL", 
+    "https://travliaq-booking-scrapper-production.up.railway.app"
+)
 
-if str(BOOKING_SCRAPPER_PATH) not in sys.path:
-    sys.path.append(str(BOOKING_SCRAPPER_PATH))
-
-try:
-    from src.scrapers.search import SearchScraper
-    from src.scrapers.details import DetailsScraper
-    from src.models.search import HotelSearchRequest, PropertyType
-    from src.models.hotel import HotelDetailsRequest
-except ImportError as e:
-    # This might happen if dependencies are missing in the MCP environment
-    # For now we assume the environment is set up correctly or we will handle it at runtime
-    print(f"Warning: Could not import Booking Scrapper modules: {e}")
+# Default timeout for HTTP requests (3 minutes)
+DEFAULT_TIMEOUT = 180.0
 
 
 async def search_hotels(
@@ -38,139 +27,99 @@ async def search_hotels(
     min_price: Optional[int] = None,
     max_price: Optional[int] = None,
     min_review_score: Optional[float] = None,
-    star_rating: Optional[List[int]] = None
+    star_rating: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
     """
-    Search for hotels using the Booking Scrapper.
+    Search for hotels on Booking.com via the REST API.
     
     Args:
-        city: City name to search for
+        city: Destination city (e.g., "Paris")
         checkin: Check-in date (YYYY-MM-DD)
         checkout: Check-out date (YYYY-MM-DD)
-        adults: Number of adults
-        children: Number of children
-        rooms: Number of rooms
-        max_results: Maximum number of results to return
-        min_price: Minimum price filter
-        max_price: Maximum price filter
-        min_review_score: Minimum review score (0-10)
-        star_rating: List of star ratings to filter by (e.g. [3, 4, 5])
+        adults: Number of adults (default: 2)
+        children: Number of children (default: 0)
+        rooms: Number of rooms (default: 1)
+        max_results: Maximum number of results (default: 10)
+        min_price: Minimum price filter (optional)
+        max_price: Maximum price filter (optional)
+        min_review_score: Minimum review score 0-10 (optional)
+        star_rating: List of star ratings to filter (e.g., [3, 4, 5])
+        
+    Returns:
+        Dict containing 'total_found' and list 'hotels' with search results
     """
-    try:
-        # Convert dates
-        checkin_date = datetime.strptime(checkin, "%Y-%m-%d").date()
-        checkout_date = datetime.strptime(checkout, "%Y-%m-%d").date()
-        
-        request = HotelSearchRequest(
-            city=city,
-            checkin=checkin_date,
-            checkout=checkout_date,
-            adults=adults,
-            children=children,
-            rooms=rooms,
-            max_results=max_results,
-            min_price=min_price,
-            max_price=max_price,
-            min_review_score=min_review_score,
-            star_rating=star_rating
+    # Build query parameters
+    params = {
+        "city": city,
+        "checkin": checkin,
+        "checkout": checkout,
+        "adults": adults,
+        "children": children,
+        "rooms": rooms,
+    }
+    
+    # Add optional filters
+    if min_price is not None:
+        params["min_price"] = min_price
+    if max_price is not None:
+        params["max_price"] = max_price
+    if min_review_score is not None:
+        params["min_review_score"] = min_review_score
+    if star_rating is not None:
+        # Convert list to comma-separated string if needed by API
+        params["star_rating"] = star_rating
+    
+    # Make HTTP request
+    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+        response = await client.get(
+            f"{BOOKING_API_URL}/api/v1/search_hotels",
+            params=params
         )
-        
-        scraper = SearchScraper()
-        result = await scraper.search_hotels(request)
-        
-        # Convert result to dict for JSON serialization
-        hotels_data = []
-        for hotel in result.hotels:
-            hotels_data.append({
-                "hotel_id": hotel.hotel_id,
-                "name": hotel.name,
-                "price": hotel.price,
-                "currency": hotel.currency,
-                "review_score": hotel.review_score,
-                "url": hotel.url
-            })
-            
-        return {
-            "total_found": result.total_found,
-            "hotels": hotels_data,
-            "search_params": {
-                "city": city,
-                "checkin": checkin,
-                "checkout": checkout
-            }
-        }
-        
-    except Exception as e:
-        return {"error": str(e)}
+        response.raise_for_status()
+        return response.json()
 
 
 async def get_hotel_details(
     hotel_id: str,
+    country_code: str,
     checkin: Optional[str] = None,
     checkout: Optional[str] = None,
     adults: int = 2,
     rooms: int = 1,
-    country_code: str = "fr"
 ) -> Dict[str, Any]:
     """
-    Get detailed information about a specific hotel.
+    Get detailed information about a specific hotel from Booking.com via the REST API.
     
     Args:
-        hotel_id: The hotel ID or URL part
-        checkin: Check-in date (YYYY-MM-DD)
-        checkout: Check-out date (YYYY-MM-DD)
-        adults: Number of adults
-        rooms: Number of rooms
-        country_code: Country code for URL construction (default: fr)
+        hotel_id: Hotel identifier or URL slug
+        country_code: Country code for the URL (e.g., "fr", "gb", "us")
+        checkin: Check-in date (YYYY-MM-DD, optional)
+        checkout: Check-out date (YYYY-MM-DD, optional)
+        adults: Number of adults (default: 2)
+        rooms: Number of rooms (default: 1)
+        
+    Returns:
+        Dict containing complete hotel details (description, amenities, rooms, reviews, etc.)
     """
-    try:
-        # Convert dates if provided
-        checkin_date = datetime.strptime(checkin, "%Y-%m-%d").date() if checkin else None
-        checkout_date = datetime.strptime(checkout, "%Y-%m-%d").date() if checkout else None
-        
-        request = HotelDetailsRequest(
-            hotel_id=hotel_id,
-            checkin=checkin_date,
-            checkout=checkout_date,
-            adults=adults,
-            rooms=rooms,
-            country_code=country_code
+    # Build query parameters
+    params = {
+        "hotel_id": hotel_id,
+        "country_code": country_code,
+        "adults": adults,
+        "rooms": rooms,
+    }
+    
+    # Add optional parameters
+    if checkin:
+        params["checkin"] = checkin
+    if checkout:
+        params["checkout"] = checkout
+    
+    # Make HTTP request
+    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+        response = await client.get(
+            f"{BOOKING_API_URL}/api/v1/hotel_details",
+            params=params
         )
-        
-        scraper = DetailsScraper()
-        async with scraper:
-            details, reviews = await scraper.get_hotel_details(request)
-            
-        # Convert to dict
-        details_dict = {
-            "hotel_id": details.hotel_id,
-            "name": details.name,
-            "address": details.address.full_address if details.address else None,
-            "coordinates": {
-                "lat": details.address.latitude,
-                "lon": details.address.longitude
-            } if details.address else None,
-            "description": details.description,
-            "stars": details.star_rating,
-            "review_score": details.review_score,
-            "review_count": details.review_count,
-            "amenities": details.amenities,
-            "popular_amenities": details.popular_amenities,
-            "images": details.images[:10], # Limit images
-            "main_image": details.main_image,
-            "cheapest_price": details.cheapest_price,
-            "rooms": [
-                {
-                    "type": r.room_type,
-                    "price": r.price,
-                    "capacity": r.capacity,
-                    "bed": r.bed_type,
-                    "cancellation": r.cancellation_policy
-                } for r in details.rooms
-            ]
-        }
-        
-        return details_dict
-        
-    except Exception as e:
-        return {"error": str(e)}
+        response.raise_for_status()
+        return response.json()
