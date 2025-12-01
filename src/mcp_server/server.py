@@ -16,7 +16,12 @@ def create_mcp() -> FastMCP:
 
     @mcp.tool(name="geo.text_to_place")
     async def geo_text_to_place(query: str, country: str | None = None, max_results: int = 5, ctx: Context = None):
-        """Geocode un texte (ville/région) vers des coordonnées. Retourne une liste."""
+        """Géocode un lieu écrit (ville/région) en coordonnées GPS.
+
+        - À utiliser en amont de tout appel météo/vols pour obtenir lat/lon fiables.
+        - Arguments : `query` obligatoire ; `country` (ISO-2) optionnel pour restreindre ; `max_results` pour limiter la liste.
+        - Retour : liste de lieux {name, country, latitude, longitude, timezone, population, ...}.
+        """
         try:
             if ctx:
                 await ctx.info(f"Geocoding query: {query}")
@@ -35,7 +40,11 @@ def create_mcp() -> FastMCP:
         timezone: str = "auto",
         ctx: Context = None,
     ) -> Dict[str, Any]:
-        """Retourne pour un lieu: géoloc, aéroport le plus proche, et climat (si dates fournies)."""
+        """Enchaîne géocodage + aéroport proche (+ climat optionnel).
+
+        - Fournir `query` (+ `country` éventuel). Ajoute un bloc `climate` si `start_date`/`end_date` (AAAA-MM-JJ) sont fournis.
+        - Retour : {place, nearest_airport, climate?} pour résumer rapidement un lieu.
+        """
         try:
             if ctx:
                 await ctx.info(f"Place overview for {query}")
@@ -54,7 +63,11 @@ def create_mcp() -> FastMCP:
     @mcp.tool(name="airports.nearest")
     async def airports_nearest(city: str | None = None, country: str | None = None,
                                lat: float | None = None, lon: float | None = None, ctx: Context = None):
-        """Trouve l'aéroport le plus proche d'une ville ou de coordonnées."""
+        """Trouve l'aéroport le plus proche d'une ville ou de coordonnées.
+
+        - Priorité : passer `lat` + `lon` si déjà connus ; sinon `city` (+ `country` optionnel) pour chercher et inclure le bloc `place`.
+        - Retour : aéroport (IATA/ICAO, distance_km) et, pour la recherche ville, le lieu correspondant.
+        """
         try:
             if lat is not None and lon is not None:
                 if ctx:
@@ -75,7 +88,11 @@ def create_mcp() -> FastMCP:
                                       country: str | None = None, lat: float | None = None,
                                       lon: float | None = None, timezone: str = "auto",
                                       ctx: Context = None):
-        """Température moyenne quotidienne pour une période (date AAAA-MM-JJ)."""
+        """Température moyenne quotidienne pour une période.
+
+        - Dates au format AAAA-MM-JJ. Préférer `lat`/`lon` ; sinon `city` (+ `country`).
+        - Retour : `average_temperature_c` et `daily[]`; `period.status` précise si la fenêtre dépasse les prévisions.
+        """
         try:
             if lat is not None and lon is not None:
                 if ctx:
@@ -99,7 +116,11 @@ def create_mcp() -> FastMCP:
         days: int = 7,
         ctx: Context = None
     ) -> Dict[str, Any]:
-        """Prévisions et conditions actuelles par coordonnées. Retourne {mode, coords, current, daily[]}."""
+        """Prévisions + conditions actuelles par coordonnées.
+
+        - Arguments : `lat`/`lon` obligatoires ; `days` (<=16) et `timezone` optionnel.
+        - Retour : {mode, coords, current, daily[]} incluant températures, humidité, précipitations.
+        """
         try:
             if ctx:
                 await ctx.info(f"Fetching weather for coordinates: {lat}, {lon}")
@@ -122,7 +143,11 @@ def create_mcp() -> FastMCP:
         timezone: str = "auto",
         ctx: Context = None
     ) -> str:
-        """Résumé court: actuel + aperçu 7 jours."""
+        """Résumé texte court météo pour 7 jours.
+
+        - Fournir `lat`/`lon`; `timezone` optionnel (auto par défaut).
+        - Retour : phrase compacte (« Actuel X°C ... + tendance 7j ») prête à répondre à l'utilisateur.
+        """
         try:
             if ctx:
                 await ctx.info(f"Generating weather brief for {lat}, {lon}")
@@ -147,7 +172,11 @@ def create_mcp() -> FastMCP:
         timezone: str = "auto",
         ctx: Context = None
     ) -> Dict[str, Any]:
-        """Météo quotidienne sur une période AAAA-MM-JJ → AAAA-MM-JJ. Retourne {mode, coords, period, daily[]}."""
+        """Météo quotidienne sur une période AAAA-MM-JJ → AAAA-MM-JJ.
+
+        - Fournir `lat`/`lon` + `start_date`/`end_date`; `timezone` optionnel.
+        - Retour : {mode, coords, period, daily[]}. Si la période dépasse la fenêtre de prévision (~16j), `period.status` = `outside_forecast_window`.
+        """
         try:
             if ctx:
                 await ctx.info(f"Fetching weather for period {start_date} to {end_date}")
@@ -165,7 +194,7 @@ def create_mcp() -> FastMCP:
 
     @mcp.tool(name="health.ping")
     async def ping(ctx: Context = None) -> str:
-        """Vérifie que le serveur répond."""
+        """Ping simple pour vérifier la disponibilité ; répond "pong"."""
         if ctx:
             await ctx.info("Ping received")
         return "pong"
@@ -187,7 +216,13 @@ def create_mcp() -> FastMCP:
         seed: int = 0,
         ctx: Context = None
     ) -> str:
-        """Génère l'image HÉRO 1920x1080 et l'upload dans Supabase/TRIPS/<trip_folder>/ ; retourne l'URL (string)."""
+        """Héro 1920x1080 généré via OpenRouter puis uploadé dans Supabase/TRIPS/<trip_folder>/.
+
+        - Requis : `city`, `country`. Optionnels : `theme_keywords`/`style_preset` pour l'ambiance ; `trip_name`/`trip_folder` pour grouper les assets.
+        - Compression : `fmt` (JPEG/WEBP), `max_kb`, `quality`, `shots` et `seed` pour la reproductibilité.
+        - Prérequis serveur : clés OPENROUTER + SUPABASE et bucket configuré.
+        - Retour : URL publique de l'image.
+        """
         try:
             if ctx:
                 await ctx.info(f"Generating hero image for {city}, {country}")
@@ -235,7 +270,12 @@ def create_mcp() -> FastMCP:
         seed: int = 0,
         ctx: Context = None
     ) -> str:
-        """Génère le BACKGROUND 1920x1080 et l'upload dans Supabase/TRIPS/<trip_folder>/ ; retourne l'URL (string)."""
+        """Background 1920x1080 pour une activité, uploadé dans Supabase/TRIPS/<trip_folder>/.
+
+        - Requis : `activity`, `city`, `country`. Optionnels : `mood_keywords`/`style_preset` ; `trip_name`/`trip_folder` pour aligner avec le héro.
+        - Paramètres de sortie : `fmt`, `max_kb`, `quality`, `shots`, `seed` similaires à `images.hero`.
+        - Retour : URL publique.
+        """
         try:
             if ctx:
                 await ctx.info(f"Generating background image for activity: {activity} in {city}, {country}")
@@ -284,7 +324,12 @@ def create_mcp() -> FastMCP:
         seed: int = 0,
         ctx: Context = None
     ) -> str:
-        """Génère un SLIDER 800x600 (5:4 → crop 4:3) et l'upload dans Supabase/TRIPS/<trip_folder>/ ; retourne l'URL (string)."""
+        """Slider 800x600 (5:4 recadré 4:3) pour carrousel, uploadé dans Supabase/TRIPS/<trip_folder>/.
+
+        - Requis : `subject`, `place`, `city`, `country`. Optionnels : `style_preset`, `trip_name`/`trip_folder` pour réutiliser le même dossier que le héro.
+        - Formats : `fmt_site` (WEBP/JPEG), `max_kb`, `quality`, `shots`, `seed` pour maîtriser le poids.
+        - Retour : URL publique prête pour l'interface.
+        """
         try:
             if ctx:
                 await ctx.info(f"Generating slider image: {subject} at {place}, {city}")
@@ -317,7 +362,7 @@ def create_mcp() -> FastMCP:
 
     @mcp.tool(name="debug.ls")
     async def debug_ls(path: str = ".", ctx: Context = None) -> str:
-        """Liste les fichiers dans un dossier (pour debug)."""
+        """Liste un dossier (debug uniquement). Retourne une chaîne multi-lignes."""
         import os
         try:
             if ctx:
@@ -361,7 +406,11 @@ def create_mcp() -> FastMCP:
         star_rating: Optional[List[int]] = None,
         ctx: Context = None
     ) -> Dict[str, Any]:
-        """Search for hotels on Booking.com."""
+        """Recherche Booking.com avec filtres.
+
+        - Requis : `city`, `checkin`, `checkout` (AAAA-MM-JJ). Optionnels : `adults`, `children`, `rooms`, `max_results`, filtres de prix/note (`min_price`, `max_price`, `min_review_score`, `star_rating`).
+        - Retour : liste d'hôtels, `total_found`, et champs prix/notes prêts à trier côté agent.
+        """
         try:
             if ctx:
                 await ctx.info(f"Searching hotels in {city} from {checkin} to {checkout}")
@@ -399,7 +448,11 @@ def create_mcp() -> FastMCP:
         country_code: str = "fr",
         ctx: Context = None
     ) -> Dict[str, Any]:
-        """Get detailed information about a specific hotel from Booking.com."""
+        """Détails Booking.com pour un hôtel.
+
+        - Requis : `hotel_id` ou slug Booking. Optionnels : `checkin`/`checkout` (AAAA-MM-JJ), `adults`, `rooms`, `country_code` pour choisir le domaine.
+        - Retour : description, équipements, chambres, photos et avis consolidés.
+        """
         try:
             if ctx:
                 await ctx.info(f"Fetching details for hotel {hotel_id}")
