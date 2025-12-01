@@ -13,34 +13,35 @@ if str(SRC_DIR) not in sys.path:
 print(f"Project Root: {PROJECT_ROOT}")
 print(f"Src Dir: {SRC_DIR}")
 
-async def test_imports():
-    print("\n--- Testing Imports ---")
-    try:
-        from mcp_server.tools import booking
-        print("[OK] Successfully imported booking tool")
-    except ImportError as e:
-        print(f"[FAIL] Failed to import booking tool: {e}")
-        # return # Don't return, try the next one
+def test_imports():
+    async def _run():
+        print("\n--- Testing Imports ---")
+        try:
+            from mcp_server.tools import booking
+            print("[OK] Successfully imported booking tool")
+        except ImportError as e:
+            print(f"[FAIL] Failed to import booking tool: {e}")
 
-    try:
-        from mcp_server.tools import flights
-        print("[OK] Successfully imported flights tool")
-    except ImportError as e:
-        print(f"[FAIL] Failed to import flights tool: {e}")
-        # return
+        try:
+            from mcp_server.tools import flights
+            print("[OK] Successfully imported flights tool")
+        except ImportError as e:
+            print(f"[FAIL] Failed to import flights tool: {e}")
 
-    print("\n--- Testing Instantiation (Mock) ---")
-    # We won't actually run the scrapers as they require browsers, but we check if we can access the functions
-    
-    if hasattr(booking, 'search_hotels'):
-        print("[OK] booking.search_hotels exists")
-    else:
-        print("[FAIL] booking.search_hotels missing")
+        print("\n--- Testing Instantiation (Mock) ---")
 
-    if hasattr(flights, 'get_flight_prices'):
-        print("[OK] flights.get_flight_prices exists")
-    else:
-        print("[FAIL] flights.get_flight_prices missing")
+        if 'booking' in locals() and hasattr(booking, 'search_hotels'):
+            print("[OK] booking.search_hotels exists")
+        else:
+            print("[FAIL] booking.search_hotels missing")
+
+        if 'flights' in locals() and hasattr(flights, 'get_flight_prices'):
+            print("[OK] flights.get_flight_prices exists")
+        else:
+            print("[FAIL] flights.get_flight_prices missing")
+
+    asyncio.run(_run())
+
 
 if __name__ == "__main__":
-    asyncio.run(test_imports())
+    test_imports()
