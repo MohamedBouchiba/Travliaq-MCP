@@ -18,7 +18,8 @@ class DummyResponse:
         return self._payload
 
 
-def test_geocode_text_maps_fields(monkeypatch):
+@pytest.mark.anyio
+async def test_geocode_text_maps_fields(monkeypatch):
     payload = {
         "results": [
             {
@@ -33,12 +34,12 @@ def test_geocode_text_maps_fields(monkeypatch):
         ]
     }
 
-    def fake_get(url, params, headers, timeout, proxies):
-        return DummyResponse(payload)
+    async def fake_http_get(url, params, **kwargs):
+        return payload
 
-    monkeypatch.setattr(places.requests, "get", fake_get)
+    monkeypatch.setattr(places, "_http_get", fake_http_get)
 
-    results = places.geocode_text("Paris", count=1)
+    results = await places.geocode_text("Paris", count=1)
     assert results == [
         {
             "name": "Paris",
@@ -52,11 +53,10 @@ def test_geocode_text_maps_fields(monkeypatch):
     ]
 
 
-def test_nearest_airport_for_place_combines_results(monkeypatch):
-    monkeypatch.setattr(
-        places,
-        "geocode_text",
-        lambda query, count=1, country=None: [
+@pytest.mark.anyio
+async def test_nearest_airport_for_place_combines_results(monkeypatch):
+    async def fake_geocode(query, count=1, country=None):
+        return [
             {
                 "name": "Paris",
                 "country": "France",
@@ -64,15 +64,15 @@ def test_nearest_airport_for_place_combines_results(monkeypatch):
                 "longitude": 2.3522,
                 "timezone": "Europe/Paris",
             }
-        ],
-    )
-    monkeypatch.setattr(
-        places,
-        "nearest_airport",
-        lambda lat, lon: {"name": "CDG", "iata": "CDG", "distance_km": 23.4},
-    )
+        ]
 
-    result = places.nearest_airport_for_place("Paris")
+    async def fake_nearest(lat, lon):
+        return {"name": "CDG", "iata": "CDG", "distance_km": 23.4}
+
+    monkeypatch.setattr(places, "geocode_text", fake_geocode)
+    monkeypatch.setattr(places, "nearest_airport", fake_nearest)
+
+    result = await places.nearest_airport_for_place("Paris")
     assert result["place"]["name"] == "Paris"
     assert result["iata"] == "CDG"
     assert result["distance_km"] == 23.4

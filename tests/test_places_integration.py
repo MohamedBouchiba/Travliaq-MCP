@@ -29,14 +29,14 @@ def mock_place_http(monkeypatch):
         }
     }
 
-    def fake_http_get(url: str, params: dict, timeout: int = 15):
+    async def fake_http_get(url: str, params: dict, timeout: int = 15, retries: int = 0):
         if "geocoding" in url:
             return {"results": [sample_place]}
         if "climate" in url:
             return climate_payload
         raise AssertionError(f"Unexpected URL {url}")
 
-    def fake_load_airports():
+    async def fake_load_airports():
         return [
             {
                 "name": "Charles de Gaulle International Airport",
@@ -62,8 +62,9 @@ def mock_place_http(monkeypatch):
     monkeypatch.setattr(places, "_load_airports", fake_load_airports)
 
 
-def test_geocode_text_returns_basic_place_data():
-    results = places.geocode_text("Paris", count=1)
+@pytest.mark.anyio
+async def test_geocode_text_returns_basic_place_data():
+    results = await places.geocode_text("Paris", count=1)
     assert results, "Expected at least one geocoding result"
     top = results[0]
     for field in ["name", "country", "latitude", "longitude", "timezone"]:
@@ -72,15 +73,17 @@ def test_geocode_text_returns_basic_place_data():
     assert isinstance(top["longitude"], (int, float))
 
 
-def test_nearest_airport_for_place_finds_iata():
-    airport = places.nearest_airport_for_place("Paris")
+@pytest.mark.anyio
+async def test_nearest_airport_for_place_finds_iata():
+    airport = await places.nearest_airport_for_place("Paris")
     assert airport.get("iata") == "ORY" or airport.get("iata") == "CDG"
     assert "distance_km" in airport and airport["distance_km"] > 0
     assert "place" in airport and airport["place"].get("name")
 
 
-def test_climate_mean_temperature_for_place_has_average_and_daily():
-    data = places.climate_mean_temperature_for_place(
+@pytest.mark.anyio
+async def test_climate_mean_temperature_for_place_has_average_and_daily():
+    data = await places.climate_mean_temperature_for_place(
         "Paris",
         start_date="2024-06-01",
         end_date="2024-06-07",
@@ -92,8 +95,9 @@ def test_climate_mean_temperature_for_place_has_average_and_daily():
     assert data["average_temperature_c"] == pytest.approx(19.433, rel=1e-3)
 
 
-def test_place_overview_combines_geocode_airport_climate():
-    overview = places.place_overview(
+@pytest.mark.anyio
+async def test_place_overview_combines_geocode_airport_climate():
+    overview = await places.place_overview(
         "Paris",
         start_date="2024-06-01",
         end_date="2024-06-07",

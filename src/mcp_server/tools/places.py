@@ -1,7 +1,8 @@
+import asyncio
 import math
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 CLIMATE_URL = "https://climate-api.open-meteo.com/v1/climate"
@@ -16,25 +17,42 @@ class GeoError(Exception):
     pass
 
 
-def _http_get(url: str, params: Dict[str, Any], timeout: int = 15) -> Dict[str, Any]:
-    r = requests.get(
-        url,
-        params=params,
+async def _http_get(
+    url: str,
+    params: Dict[str, Any],
+    *,
+    timeout: float = 15.0,
+    retries: int = 2,
+    backoff: float = 1.5,
+) -> Dict[str, Any]:
+    last_err: Exception | None = None
+    async with httpx.AsyncClient(
         headers=USER_AGENT,
-        timeout=timeout,
+        timeout=httpx.Timeout(timeout),
+        follow_redirects=True,
+        trust_env=False,
         proxies=NO_PROXY,
-    )
-    r.raise_for_status()
-    return r.json()
+    ) as client:
+        for attempt in range(retries + 1):
+            try:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as exc:  # pragma: no cover - network failures exercised via retries
+                last_err = exc
+                if attempt == retries:
+                    break
+                await asyncio.sleep(backoff**attempt)
+    raise GeoError(str(last_err))
 
 
-def geocode_text(query: str, count: int = 5, country: Optional[str] = None) -> List[Dict[str, Any]]:
+async def geocode_text(query: str, count: int = 5, country: Optional[str] = None) -> List[Dict[str, Any]]:
     if not query:
         raise GeoError("query required")
     params = {"name": query, "count": max(1, min(count, 10))}
     if country:
         params["country"] = country
-    data = _http_get(GEOCODE_URL, params)
+    data = await _http_get(GEOCODE_URL, params)
     results = data.get("results") or []
     out: List[Dict[str, Any]] = []
     for item in results:
@@ -52,18 +70,11 @@ def geocode_text(query: str, count: int = 5, country: Optional[str] = None) -> L
     return out
 
 
-def _load_airports() -> List[Dict[str, Any]]:
+async def _load_airports() -> List[Dict[str, Any]]:
     global _AIRPORTS
     if _AIRPORTS is not None:
         return _AIRPORTS
-    data = requests.get(
-        AIRPORTS_DATA_URL,
-        headers=USER_AGENT,
-        timeout=30,
-        proxies=NO_PROXY,
-    )
-    data.raise_for_status()
-    j = data.json()
+    j = await _http_get(AIRPORTS_DATA_URL, {}, timeout=30)
     airports = []
     for _code, info in j.items():
         if not info.get("iata"):
@@ -92,8 +103,8 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def nearest_airport(lat: float, lon: float) -> Dict[str, Any]:
-    airports = _load_airports()
+async def nearest_airport(lat: float, lon: float) -> Dict[str, Any]:
+    airports = await _load_airports()
     best = None
     best_dist = float("inf")
     for ap in airports:
@@ -111,17 +122,17 @@ def nearest_airport(lat: float, lon: float) -> Dict[str, Any]:
     return out
 
 
-def nearest_airport_for_place(query: str, country: Optional[str] = None) -> Dict[str, Any]:
-    results = geocode_text(query, count=1, country=country)
+async def nearest_airport_for_place(query: str, country: Optional[str] = None) -> Dict[str, Any]:
+    results = await geocode_text(query, count=1, country=country)
     if not results:
         raise GeoError("place not found")
     coords = results[0]
-    ap = nearest_airport(coords["latitude"], coords["longitude"])
+    ap = await nearest_airport(coords["latitude"], coords["longitude"])
     ap["place"] = coords
     return ap
 
 
-def climate_mean_temperature(lat: float, lon: float, start_date: str, end_date: str, timezone: str = "UTC") -> Dict[str, Any]:
+async def climate_mean_temperature(lat: float, lon: float, start_date: str, end_date: str, timezone: str = "UTC") -> Dict[str, Any]:
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -130,7 +141,7 @@ def climate_mean_temperature(lat: float, lon: float, start_date: str, end_date: 
         "daily": "temperature_2m_mean",
         "timezone": timezone,
     }
-    data = _http_get(CLIMATE_URL, params)
+    data = await _http_get(CLIMATE_URL, params)
     daily = data.get("daily", {})
     times = daily.get("time") or []
     temps = daily.get("temperature_2m_mean") or []
@@ -150,19 +161,19 @@ def climate_mean_temperature(lat: float, lon: float, start_date: str, end_date: 
     }
 
 
-def climate_mean_temperature_for_place(query: str, start_date: str, end_date: str, country: Optional[str] = None,
+async def climate_mean_temperature_for_place(query: str, start_date: str, end_date: str, country: Optional[str] = None,
                                        timezone: str = "auto") -> Dict[str, Any]:
-    results = geocode_text(query, count=1, country=country)
+    results = await geocode_text(query, count=1, country=country)
     if not results:
         raise GeoError("place not found")
     coords = results[0]
     tz = coords.get("timezone") or timezone
-    data = climate_mean_temperature(coords["latitude"], coords["longitude"], start_date, end_date, tz)
+    data = await climate_mean_temperature(coords["latitude"], coords["longitude"], start_date, end_date, tz)
     data["place"] = coords
     return data
 
 
-def place_overview(
+async def place_overview(
     query: str,
     *,
     country: Optional[str] = None,
@@ -172,20 +183,20 @@ def place_overview(
 ) -> Dict[str, Any]:
     """Return geocode, nearest airport, and optional climate block for a place name."""
 
-    geo_results = geocode_text(query, count=1, country=country)
+    geo_results = await geocode_text(query, count=1, country=country)
     if not geo_results:
         raise GeoError("place not found")
 
     place = geo_results[0]
     lat, lon = place["latitude"], place["longitude"]
 
-    airport = nearest_airport(lat, lon)
+    airport = await nearest_airport(lat, lon)
     airport["place"] = {"name": place.get("name"), "country": place.get("country")}
 
     climate = None
     if start_date and end_date:
         tz = place.get("timezone") or timezone
-        climate = climate_mean_temperature(lat, lon, start_date, end_date, tz)
+        climate = await climate_mean_temperature(lat, lon, start_date, end_date, tz)
         climate["place"] = place
 
     return {

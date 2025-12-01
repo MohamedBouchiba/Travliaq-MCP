@@ -25,7 +25,7 @@ def create_mcp() -> FastMCP:
         try:
             if ctx:
                 await ctx.info(f"Geocoding query: {query}")
-            return g.geocode_text(query, max_results, country)
+            return await g.geocode_text(query, max_results, country)
         except Exception as e:
             if ctx:
                 await ctx.error(f"Geocoding failed: {str(e)}")
@@ -48,7 +48,7 @@ def create_mcp() -> FastMCP:
         try:
             if ctx:
                 await ctx.info(f"Place overview for {query}")
-            return g.place_overview(
+            return await g.place_overview(
                 query,
                 country=country,
                 start_date=start_date,
@@ -72,12 +72,12 @@ def create_mcp() -> FastMCP:
             if lat is not None and lon is not None:
                 if ctx:
                     await ctx.info(f"Searching nearest airport for coords {lat},{lon}")
-                return g.nearest_airport(lat, lon)
+                return await g.nearest_airport(lat, lon)
             if not city:
                 raise ValueError("city or lat/lon required")
             if ctx:
                 await ctx.info(f"Searching nearest airport for {city}")
-            return g.nearest_airport_for_place(city, country)
+            return await g.nearest_airport_for_place(city, country)
         except Exception as e:
             if ctx:
                 await ctx.error(f"Airport lookup failed: {str(e)}")
@@ -97,12 +97,12 @@ def create_mcp() -> FastMCP:
             if lat is not None and lon is not None:
                 if ctx:
                     await ctx.info(f"Climate stats by coords {lat},{lon}")
-                return g.climate_mean_temperature(lat, lon, start_date, end_date, timezone)
+                return await g.climate_mean_temperature(lat, lon, start_date, end_date, timezone)
             if not city:
                 raise ValueError("city or lat/lon required")
             if ctx:
                 await ctx.info(f"Climate stats for {city}")
-            return g.climate_mean_temperature_for_place(city, start_date, end_date, country, timezone)
+            return await g.climate_mean_temperature_for_place(city, start_date, end_date, country, timezone)
         except Exception as e:
             if ctx:
                 await ctx.error(f"Climate stats failed: {str(e)}")
