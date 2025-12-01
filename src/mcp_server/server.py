@@ -5,6 +5,7 @@ from .tools import weather as w
 from .tools import image_generation as imgs
 from .tools import booking as b
 from .tools import flights as f
+from .tools import places as g
 
 
 def create_mcp() -> FastMCP:
@@ -13,11 +14,88 @@ def create_mcp() -> FastMCP:
         version="1.0.0"
     )
 
+    @mcp.tool(name="geo.text_to_place")
+    async def geo_text_to_place(query: str, country: str | None = None, max_results: int = 5, ctx: Context = None):
+        """Geocode un texte (ville/région) vers des coordonnées. Retourne une liste."""
+        try:
+            if ctx:
+                await ctx.info(f"Geocoding query: {query}")
+            return g.geocode_text(query, max_results, country)
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Geocoding failed: {str(e)}")
+            raise
+
+    @mcp.tool(name="places.overview")
+    async def places_overview(
+        query: str,
+        country: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        timezone: str = "auto",
+        ctx: Context = None,
+    ) -> Dict[str, Any]:
+        """Retourne pour un lieu: géoloc, aéroport le plus proche, et climat (si dates fournies)."""
+        try:
+            if ctx:
+                await ctx.info(f"Place overview for {query}")
+            return g.place_overview(
+                query,
+                country=country,
+                start_date=start_date,
+                end_date=end_date,
+                timezone=timezone,
+            )
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Place overview failed: {str(e)}")
+            raise
+
+    @mcp.tool(name="airports.nearest")
+    async def airports_nearest(city: str | None = None, country: str | None = None,
+                               lat: float | None = None, lon: float | None = None, ctx: Context = None):
+        """Trouve l'aéroport le plus proche d'une ville ou de coordonnées."""
+        try:
+            if lat is not None and lon is not None:
+                if ctx:
+                    await ctx.info(f"Searching nearest airport for coords {lat},{lon}")
+                return g.nearest_airport(lat, lon)
+            if not city:
+                raise ValueError("city or lat/lon required")
+            if ctx:
+                await ctx.info(f"Searching nearest airport for {city}")
+            return g.nearest_airport_for_place(city, country)
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Airport lookup failed: {str(e)}")
+            raise
+
+    @mcp.tool(name="climate.avg_temperature")
+    async def climate_avg_temperature(city: str | None = None, start_date: str = "", end_date: str = "",
+                                      country: str | None = None, lat: float | None = None,
+                                      lon: float | None = None, timezone: str = "auto",
+                                      ctx: Context = None):
+        """Température moyenne quotidienne pour une période (date AAAA-MM-JJ)."""
+        try:
+            if lat is not None and lon is not None:
+                if ctx:
+                    await ctx.info(f"Climate stats by coords {lat},{lon}")
+                return g.climate_mean_temperature(lat, lon, start_date, end_date, timezone)
+            if not city:
+                raise ValueError("city or lat/lon required")
+            if ctx:
+                await ctx.info(f"Climate stats for {city}")
+            return g.climate_mean_temperature_for_place(city, start_date, end_date, country, timezone)
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Climate stats failed: {str(e)}")
+            raise
+
     @mcp.tool(name="weather.by_coords")
     async def weather_by_coords(
-        lat: float, 
-        lon: float, 
-        timezone: str = "auto", 
+        lat: float,
+        lon: float,
+        timezone: str = "auto",
         days: int = 7,
         ctx: Context = None
     ) -> Dict[str, Any]:
@@ -99,6 +177,7 @@ def create_mcp() -> FastMCP:
         theme_keywords: Optional[List[str]] = None,
         trip_name: Optional[str] = None,
         trip_folder: Optional[str] = None,
+        style_preset: Optional[str] = None,
         width: int = 1920,
         height: int = 1080,
         fmt: Literal["JPEG", "WEBP"] = "JPEG",
@@ -117,6 +196,7 @@ def create_mcp() -> FastMCP:
                 city=city,
                 country=country,
                 theme_keywords=theme_keywords,
+                style_preset=style_preset,
                 trip_name=trip_name,
                 trip_folder=trip_folder,
                 width=width,
@@ -145,6 +225,7 @@ def create_mcp() -> FastMCP:
         mood_keywords: Optional[List[str]] = None,
         trip_name: Optional[str] = None,
         trip_folder: Optional[str] = None,
+        style_preset: Optional[str] = None,
         width: int = 1920,
         height: int = 1080,
         fmt: Literal["JPEG", "WEBP"] = "JPEG",
@@ -152,7 +233,6 @@ def create_mcp() -> FastMCP:
         quality: int = 80,
         shots: int = 1,
         seed: int = 0,
-        style_preset: str = "photographic",
         ctx: Context = None
     ) -> str:
         """Génère le BACKGROUND 1920x1080 et l'upload dans Supabase/TRIPS/<trip_folder>/ ; retourne l'URL (string)."""
@@ -165,6 +245,7 @@ def create_mcp() -> FastMCP:
                 city=city,
                 country=country,
                 mood_keywords=mood_keywords,
+                style_preset=style_preset,
                 trip_name=trip_name,
                 trip_folder=trip_folder,
                 width=width,
@@ -174,7 +255,6 @@ def create_mcp() -> FastMCP:
                 quality=quality,
                 shots=shots,
                 seed=seed,
-                style_preset=style_preset,
             )
             
             if ctx:
@@ -194,6 +274,7 @@ def create_mcp() -> FastMCP:
         country: str,
         trip_name: Optional[str] = None,
         trip_folder: Optional[str] = None,
+        style_preset: Optional[str] = None,
         width: int = 800,
         height: int = 600,
         fmt_site: Literal["WEBP", "JPEG"] = "WEBP",
@@ -201,7 +282,6 @@ def create_mcp() -> FastMCP:
         quality: int = 80,
         shots: int = 1,
         seed: int = 0,
-        style_preset: str = "photographic",
         ctx: Context = None
     ) -> str:
         """Génère un SLIDER 800x600 (5:4 → crop 4:3) et l'upload dans Supabase/TRIPS/<trip_folder>/ ; retourne l'URL (string)."""
@@ -214,6 +294,7 @@ def create_mcp() -> FastMCP:
                 place=place,
                 city=city,
                 country=country,
+                style_preset=style_preset,
                 trip_name=trip_name,
                 trip_folder=trip_folder,
                 width=width,
@@ -223,7 +304,6 @@ def create_mcp() -> FastMCP:
                 quality=quality,
                 shots=shots,
                 seed=seed,
-                style_preset=style_preset,
             )
             
             if ctx:
