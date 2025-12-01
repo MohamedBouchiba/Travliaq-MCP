@@ -3,6 +3,8 @@ from pathlib import Path
 from fastmcp import FastMCP, Context
 from .tools import weather as w
 from .tools import image_generation as imgs
+from .tools import booking as b
+from .tools import flights as f
 
 
 def create_mcp() -> FastMCP:
@@ -262,6 +264,112 @@ def create_mcp() -> FastMCP:
             if ctx:
                 await ctx.error(f"Directory listing failed: {str(e)}")
             return error_msg
+
+
+    @mcp.tool(name="booking.search")
+    async def booking_search(
+        city: str,
+        checkin: str,
+        checkout: str,
+        adults: int = 2,
+        children: int = 0,
+        rooms: int = 1,
+        max_results: int = 10,
+        min_price: Optional[int] = None,
+        max_price: Optional[int] = None,
+        min_review_score: Optional[float] = None,
+        star_rating: Optional[List[int]] = None,
+        ctx: Context = None
+    ) -> Dict[str, Any]:
+        """Search for hotels on Booking.com."""
+        try:
+            if ctx:
+                await ctx.info(f"Searching hotels in {city} from {checkin} to {checkout}")
+            
+            result = await b.search_hotels(
+                city=city,
+                checkin=checkin,
+                checkout=checkout,
+                adults=adults,
+                children=children,
+                rooms=rooms,
+                max_results=max_results,
+                min_price=min_price,
+                max_price=max_price,
+                min_review_score=min_review_score,
+                star_rating=star_rating
+            )
+            
+            if ctx:
+                await ctx.info(f"Found {result.get('total_found', 0)} hotels")
+            
+            return result
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Booking search failed: {str(e)}")
+            raise
+
+    @mcp.tool(name="booking.details")
+    async def booking_details(
+        hotel_id: str,
+        checkin: Optional[str] = None,
+        checkout: Optional[str] = None,
+        adults: int = 2,
+        rooms: int = 1,
+        country_code: str = "fr",
+        ctx: Context = None
+    ) -> Dict[str, Any]:
+        """Get detailed information about a specific hotel from Booking.com."""
+        try:
+            if ctx:
+                await ctx.info(f"Fetching details for hotel {hotel_id}")
+            
+            result = await b.get_hotel_details(
+                hotel_id=hotel_id,
+                checkin=checkin,
+                checkout=checkout,
+                adults=adults,
+                rooms=rooms,
+                country_code=country_code
+            )
+            
+            if ctx:
+                await ctx.info("Hotel details retrieved")
+            
+            return result
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Booking details failed: {str(e)}")
+            raise
+
+    @mcp.tool(name="flights.prices")
+    async def flights_prices(
+        origin: str,
+        destination: str,
+        months_ahead: int = 3,
+        headless: bool = True,
+        ctx: Context = None
+    ) -> Dict[str, Any]:
+        """Get flight prices from Google Flights calendar."""
+        try:
+            if ctx:
+                await ctx.info(f"Scraping flight prices from {origin} to {destination} for {months_ahead} months")
+            
+            result = await f.get_flight_prices(
+                origin=origin,
+                destination=destination,
+                months_ahead=months_ahead,
+                headless=headless
+            )
+            
+            if ctx:
+                await ctx.info("Flight prices retrieved")
+            
+            return result
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Flight scraping failed: {str(e)}")
+            raise
 
     from .resources import register_resources
     register_resources(mcp)
