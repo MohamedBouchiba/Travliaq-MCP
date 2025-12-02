@@ -31,7 +31,7 @@ async def _http_get(
         timeout=httpx.Timeout(timeout),
         follow_redirects=True,
         trust_env=False,
-        proxies=NO_PROXY,
+
     ) as client:
         for attempt in range(retries + 1):
             try:
