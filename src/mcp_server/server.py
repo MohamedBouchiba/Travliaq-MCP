@@ -201,67 +201,30 @@ def create_mcp() -> FastMCP:
 
     @mcp.tool(name="images.hero")
     async def images_hero(
+        trip_code: str,
+        prompt: str,
         city: str,
         country: str,
-        theme_keywords: Optional[List[str]] = None,
-        trip_name: Optional[str] = None,
-        trip_folder: Optional[str] = None,
-        style_preset: Optional[str] = None,
-        width: int = 1920,
-        height: int = 1080,
-        fmt: Literal["JPEG", "WEBP"] = "JPEG",
-        max_kb: int = 500,
-        quality: int = 85,
-        shots: int = 1,
-        seed: int = 0,
         ctx: Context = None
     ) -> Dict[str, Any]:
-        """Génère une image hero 1920x1080 pour le voyage.
+        """Génère l'image principale (Hero) du voyage. Format 1920x1080.
 
-        Cette image est utilisée comme main_image du trip dans le JSON final.
-
-        ARGUMENTS OBLIGATOIRES:
-        - city (str): Ville de destination (ex: "New York", "Paris")
-        - country (str): Pays (ex: "United States", "France")
-
-        ARGUMENTS OPTIONNELS:
-        - trip_name (str): Nom du voyage pour organiser les fichiers
-        - trip_folder (str): Dossier pour grouper tous les assets du trip
-
-        RETOUR:
-        {
-          "url": "https://supabase.url/.../hero_123456.jpg",
-          "type": "hero",
-          "usage": "main_image"
-        }
-
-        UTILISATION DANS LE JSON:
-        {
-          "code": "NYC2025",
-          "destination": "New York",
-          "main_image": "<url retournée>",
-          ...
-        }
+        Cette image est la bannière principale. Elle doit être spectaculaire, inspirante et de très haute qualité.
+        
+        Args:
+            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025"). Sert à organiser les fichiers.
+            prompt: Description VISUELLE détaillée de la scène. (ex: "Vue panoramique dorée du temple Kinkaku-ji se reflétant dans l'étang au coucher du soleil").
+            city: La ville du voyage.
+            country: Le pays du voyage.
+        
+        Returns:
+            Dict contenant l'URL de l'image générée et ses métadonnées.
         """
         try:
             if ctx:
-                await ctx.info(f"Generating hero image for {city}, {country}")
+                await ctx.info(f"Generating hero image for {city}, {country} (Trip: {trip_code})")
 
-            url = imgs.tool_generate_hero(
-                city=city,
-                country=country,
-                theme_keywords=theme_keywords,
-                style_preset=style_preset,
-                trip_name=trip_name,
-                trip_folder=trip_folder,
-                width=width,
-                height=height,
-                fmt=fmt,
-                max_kb=max_kb,
-                quality=quality,
-                shots=shots,
-                seed=seed,
-            )
+            url = imgs.generate_hero(trip_code, prompt, city, country)
 
             if ctx:
                 await ctx.info(f"Hero image generated: {url}")
@@ -280,76 +243,28 @@ def create_mcp() -> FastMCP:
 
     @mcp.tool(name="images.background")
     async def images_background(
-        activity: str,
+        trip_code: str,
+        prompt: str,
         city: str,
         country: str,
-        mood_keywords: Optional[List[str]] = None,
-        trip_name: Optional[str] = None,
-        trip_folder: Optional[str] = None,
-        style_preset: Optional[str] = None,
-        width: int = 1920,
-        height: int = 1080,
-        fmt: Literal["JPEG", "WEBP"] = "JPEG",
-        max_kb: int = 400,
-        quality: int = 80,
-        shots: int = 1,
-        seed: int = 0,
         ctx: Context = None
     ) -> Dict[str, Any]:
-        """Génère une image de fond 1920x1080 pour une étape d'activité.
+        """Génère une image d'arrière-plan (1920x1080).
 
-        Cette image est utilisée comme main_image d'une step dans le JSON final.
-
-        ARGUMENTS OBLIGATOIRES:
-        - activity (str): Description de l'activité (ex: "visiting Central Park", "dinner at Times Square")
-        - city (str): Ville (ex: "New York")
-        - country (str): Pays (ex: "United States")
-
-        ARGUMENTS OPTIONNELS:
-        - trip_name (str): Nom du voyage (doit correspondre au hero)
-        - trip_folder (str): Dossier (doit correspondre au hero pour grouper les assets)
-
-        RETOUR:
-        {
-          "url": "https://supabase.url/.../background_123456.jpg",
-          "type": "background",
-          "usage": "step_main_image",
-          "activity": "visiting Central Park"
-        }
-
-        UTILISATION DANS LE JSON:
-        {
-          "steps": [
-            {
-              "step_number": 1,
-              "day_number": 1,
-              "title": "Central Park Walk",
-              "main_image": "<url retournée>",
-              ...
-            }
-          ]
-        }
+        Cette image servira de fond pour une étape ou une section. Elle sera affichée avec de l'opacité.
+        Elle doit être texturée, atmosphérique, et PAS trop chargée visuellement pour ne pas gêner la lecture du texte par dessus.
+        
+        Args:
+            trip_code: Le code unique du voyage.
+            prompt: Description de l'ambiance ou de la texture. (ex: "Flou artistique des lumières de la ville de nuit, bokeh doux, tons bleus et violets").
+            city: La ville.
+            country: Le pays.
         """
         try:
             if ctx:
-                await ctx.info(f"Generating background image for: {activity} in {city}, {country}")
+                await ctx.info(f"Generating background image for {city}, {country} (Trip: {trip_code})")
 
-            url = imgs.tool_generate_background(
-                activity=activity,
-                city=city,
-                country=country,
-                mood_keywords=mood_keywords,
-                style_preset=style_preset,
-                trip_name=trip_name,
-                trip_folder=trip_folder,
-                width=width,
-                height=height,
-                fmt=fmt,
-                max_kb=max_kb,
-                quality=quality,
-                shots=shots,
-                seed=seed,
-            )
+            url = imgs.generate_background(trip_code, prompt, city, country)
 
             if ctx:
                 await ctx.info(f"Background image generated: {url}")
@@ -358,7 +273,6 @@ def create_mcp() -> FastMCP:
                 "url": url,
                 "type": "background",
                 "usage": "step_main_image",
-                "activity": activity,
                 "city": city,
                 "country": country
             }
@@ -369,53 +283,38 @@ def create_mcp() -> FastMCP:
 
     @mcp.tool(name="images.slider")
     async def images_slider(
-        subject: str,
-        place: str,
+        trip_code: str,
+        prompt: str,
         city: str,
         country: str,
-        trip_name: Optional[str] = None,
-        trip_folder: Optional[str] = None,
-        style_preset: Optional[str] = None,
-        width: int = 800,
-        height: int = 600,
-        fmt_site: Literal["WEBP", "JPEG"] = "WEBP",
-        max_kb: int = 150,
-        quality: int = 80,
-        shots: int = 1,
-        seed: int = 0,
         ctx: Context = None
-    ) -> str:
-        """Slider 800x600 (5:4 recadré 4:3) pour carrousel, uploadé dans Supabase/TRIPS/<trip_folder>/.
+    ) -> Dict[str, Any]:
+        """Génère une image illustrative pour un carrousel (800x600).
 
-        - Requis : `subject`, `place`, `city`, `country`. Optionnels : `style_preset`, `trip_name`/`trip_folder` pour réutiliser le même dossier que le héro.
-        - Formats : `fmt_site` (WEBP/JPEG), `max_kb`, `quality`, `shots`, `seed` pour maîtriser le poids.
-        - Retour : URL publique prête pour l'interface.
+        Utilisé pour illustrer des activités spécifiques ou des lieux. Style "reportage voyage".
+        
+        Args:
+            trip_code: Le code unique du voyage.
+            prompt: Description de l'activité ou du lieu spécifique. (ex: "Gros plan sur un plat de sushis frais servis sur une planche en bois").
+            city: La ville.
+            country: Le pays.
         """
         try:
             if ctx:
-                await ctx.info(f"Generating slider image: {subject} at {place}, {city}")
+                await ctx.info(f"Generating slider image for {city}, {country} (Trip: {trip_code})")
             
-            result = imgs.tool_generate_slider(
-                subject=subject,
-                place=place,
-                city=city,
-                country=country,
-                style_preset=style_preset,
-                trip_name=trip_name,
-                trip_folder=trip_folder,
-                width=width,
-                height=height,
-                fmt_site=fmt_site,
-                max_kb=max_kb,
-                quality=quality,
-                shots=shots,
-                seed=seed,
-            )
+            url = imgs.generate_slider(trip_code, prompt, city, country)
             
             if ctx:
-                await ctx.info("Slider image generated and uploaded successfully")
+                await ctx.info(f"Slider image generated: {url}")
             
-            return result
+            return {
+                "url": url,
+                "type": "slider",
+                "usage": "carousel",
+                "city": city,
+                "country": country
+            }
         except Exception as e:
             if ctx:
                 await ctx.error(f"Slider image generation failed: {str(e)}")

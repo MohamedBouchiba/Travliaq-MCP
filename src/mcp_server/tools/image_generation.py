@@ -1,298 +1,185 @@
 import base64
 import io
 import os
-import re
 import time
-import uuid
-from typing import Any, Dict, Iterable, Literal, Optional, Tuple
-
 import requests
+from typing import Optional, Literal
 from PIL import Image
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# --- Configuration ---
 OPENROUTER_KEY = os.getenv("OPENROUTER_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY")
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "TRIPS")
-OPENROUTER_IMAGE_URL = "https://openrouter.ai/api/v1/images"
-DEFAULT_MODEL = os.getenv("OPENROUTER_IMAGE_MODEL", "google/nanobanana-mini-flash")
-OPENROUTER_SITE = os.getenv("OPENROUTER_SITE", "https://travliaq.local")
 
+# Constants
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/images/generations"
+DEFAULT_MODEL = "google/nanobanana-mini-flash" # As requested by user
+SITE_URL = os.getenv("OPENROUTER_SITE", "https://travliaq.local")
+APP_NAME = "Travliaq Image Generator"
 
-def _require_env():
+def _validate_env():
     if not OPENROUTER_KEY:
-        raise RuntimeError("OPENROUTER_KEY missing")
+        raise RuntimeError("Missing OPENROUTER_KEY environment variable.")
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-        raise RuntimeError("SUPABASE_URL or SUPABASE_SERVICE_KEY missing")
+        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables.")
 
-
-def _slugify(x: str) -> str:
-    x = re.sub(r"[^\w\s-]", "", x, flags=re.U).strip().lower()
-    x = re.sub(r"[-\s]+", "-", x, flags=re.U)
-    return x[:80] if x else "trip"
-
-
-def _unique_id() -> str:
-    return uuid.uuid4().hex[:10]
-
-
-def _build_folder(trip_name: Optional[str], trip_folder: Optional[str]) -> str:
-    if trip_folder:
-        return trip_folder.strip().strip("/")
-    base = _slugify(trip_name or "trip")
-    return f"{base}-{_unique_id()}"
-
-
-def _join(xs: Iterable[str] | str | None) -> str:
-    if xs is None:
-        return ""
-    return xs if isinstance(xs, str) else ", ".join([s for s in xs if s])
-
-
-NEG_COMMON = (
-    "ai artifacts, cgi, illustration, painting, blurry, soft focus, lowres, overprocessed hdr, "
-    "heavy vignette, banding, color fringing, oversaturated, posterized, watermark, text, logo, frame, "
-    "over/underexposed, distortion"
-)
-
-
-def build_hero_prompt(city: str, country: str, theme_keywords: Iterable[str] | str | None = None) -> Tuple[str, str]:
-    tk = _join(theme_keywords)
-    p = (
-        f"{city} {country}, cinematic wide travel hero, immersive sense of escape, sweeping vista, {tk}, "
-        "authentic local life hints, rich textures, natural color grading, golden hour soft light, RAW photo, "
-        "full-frame DSLR, 24–35mm wide-angle, f/5.6, ISO 100, 1/250s, daylight WB, rule of thirds, leading lines, "
-        "balanced composition, photorealistic, high dynamic range, travel magazine"
-    )
-    return p, NEG_COMMON
-
-
-def build_background_prompt(
-    activity: str, city: str, country: str, mood_keywords: Iterable[str] | str | None = None
-) -> Tuple[str, str]:
-    mk = _join(mood_keywords)
-    p = (
-        f"{activity} in {city} {country}, background to match the trip hero palette, immersive but uncluttered, {mk}, "
-        "soft depth of field, gentle contrast, clean edges, natural colors, consistent lighting with hero, RAW photo, "
-        "full-frame DSLR, 35–50mm, f/4, ISO 200, 1/160s, photorealistic, editorial travel style"
-    )
-    n = "busy clutter, harsh lighting, signage dominance, oversaturated, extreme bokeh, motion blur, noise, ai artifacts"
-    return p, n
-
-
-def build_slider_prompt(subject: str, place: str, city: str, country: str) -> Tuple[str, str]:
-    p = (
-        f"close-up of {subject} at {place} in {city} {country}, tactile textures, precise details, clean background "
-        "separation, natural color, soft directional museum lighting, RAW photo, full-frame DSLR, 90–105mm macro, f/4, "
-        "ISO 400, 1/125s, tripod, minimal reflections, polarizing filter effect, photorealistic editorial detail shot"
-    )
-    n = "glare, fingerprints, glass reflections, noisy shadows, text overlay, overprocessed hdr, ai artifacts, lowres, blur"
-    return p, n
-
-
-def _openrouter_post(
-    prompt: str,
-    negative: str,
-    size: str,
-    fmt: Literal["jpeg", "png", "webp"],
-    seed: int,
-    quality: Optional[int] = None,
-) -> bytes:
+def _upload_to_supabase(image_data: bytes, trip_code: str, filename: str, content_type: str) -> str:
+    """Uploads bytes to Supabase Storage and returns the public URL."""
+    _validate_env()
+    
+    # Path: TRIPS/{trip_code}/{filename}
+    # Ensure trip_code is clean
+    clean_code = "".join(c for c in trip_code if c.isalnum() or c in "-_").strip()
+    if not clean_code:
+        clean_code = "uncategorized"
+        
+    storage_path = f"{clean_code}/{filename}"
+    url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{storage_path}"
+    
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_KEY}",
-        "HTTP-Referer": OPENROUTER_SITE,
-        "X-Title": "Travliaq Image Generator",
-    }
-    payload: Dict[str, Any] = {
-        "model": DEFAULT_MODEL,
-        "prompt": f"{prompt}\nNegative: {negative}" if negative else prompt,
-        "size": size,
-        "response_format": "b64_json",
-        "n": 1,
-        "output_format": fmt,
-    }
-    if seed:
-        payload["seed"] = seed
-    if quality is not None:
-        payload["quality"] = quality
-    r = requests.post(OPENROUTER_IMAGE_URL, headers=headers, json=payload, timeout=180)
-    if r.status_code != 200:
-        try:
-            detail = r.json()
-        except Exception:
-            detail = r.text
-        raise RuntimeError(f"OpenRouter image error {r.status_code}: {detail}")
-    try:
-        data = r.json()
-    except Exception:
-        raise RuntimeError(f"OpenRouter returned invalid JSON (status {r.status_code}): {r.text[:500]}")
-    items = data.get("data") or []
-    if not items:
-        raise RuntimeError("OpenRouter image response missing data")
-    b64 = items[0].get("b64_json")
-    if not b64:
-        raise RuntimeError("OpenRouter image response missing b64_json")
-    return base64.b64decode(b64)
-
-
-def _cover_resize(img: Image.Image, w: int, h: int) -> Image.Image:
-    iw, ih = img.size
-    s = max(w / iw, h / ih)
-    nw, nh = int(iw * s), int(ih * s)
-    img2 = img.resize((nw, nh), Image.LANCZOS)
-    l, t = (nw - w) // 2, (nh - h) // 2
-    return img2.crop((l, t, l + w, t + h))
-
-
-def _encode(img: Image.Image, fmt: Literal["JPEG", "WEBP", "PNG"], max_kb: int, q: int) -> bytes:
-    last = None
-    while q >= 50:
-        bio = io.BytesIO()
-        if fmt == "JPEG":
-            img.save(bio, format="JPEG", quality=q, optimize=True, progressive=True)
-        elif fmt == "WEBP":
-            img.save(bio, format="WEBP", quality=q, method=6)
-        else:
-            img.save(bio, format="PNG", optimize=True)
-        b = bio.getvalue()
-        if len(b) / 1024 <= max_kb:
-            return b
-        last = b
-        q -= 5
-    return last or b
-
-
-def _supabase_upload(data: bytes, key: str, content_type: str,
-                     cache_control: str = "public, max-age=31536000, immutable") -> str:
-    url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{key}"
-    h = {
         "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
         "apikey": SUPABASE_SERVICE_KEY,
         "Content-Type": content_type,
         "x-upsert": "true",
-        "Cache-Control": cache_control,
     }
-    r = requests.put(url, headers=h, data=data, timeout=180)
-    if r.status_code not in (200, 201):
-        raise RuntimeError(f"Supabase upload {r.status_code} {r.text[:200]}")
-    return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{key}"
+    
+    try:
+        response = requests.post(url, headers=headers, data=image_data, timeout=60)
+        # Supabase sometimes returns 200 for updates, 201 for creates
+        if response.status_code not in (200, 201):
+             raise RuntimeError(f"Supabase upload failed ({response.status_code}): {response.text}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to upload to Supabase: {str(e)}")
 
+    # Construct Public URL
+    return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{storage_path}"
 
-def _build_key(folder: str, filename: str) -> str:
-    return f"{folder.strip('/')}/{filename}"
+def _generate_image_openrouter(prompt: str, width: int, height: int) -> bytes:
+    """Calls OpenRouter API to generate an image."""
+    _validate_env()
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_KEY}",
+        "HTTP-Referer": SITE_URL,
+        "X-Title": APP_NAME,
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": DEFAULT_MODEL,
+        "prompt": prompt,
+        "n": 1,
+        "size": f"{width}x{height}",
+        "response_format": "b64_json"
+    }
+    
+    try:
+        response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=120)
+        
+        if response.status_code != 200:
+            try:
+                error_json = response.json()
+                error_msg = error_json.get("error", {}).get("message", response.text)
+            except Exception:
+                error_msg = response.text
+            raise RuntimeError(f"OpenRouter API Error ({response.status_code}): {error_msg}")
+            
+        data = response.json()
+        
+        # Robustly parse response
+        if "data" not in data or not data["data"]:
+             raise RuntimeError(f"OpenRouter returned no data. Response: {data}")
+             
+        b64_data = data["data"][0].get("b64_json")
+        if not b64_data:
+             raise RuntimeError("OpenRouter response missing 'b64_json' field.")
+             
+        return base64.b64decode(b64_data)
+        
+    except requests.exceptions.JSONDecodeError:
+        raise RuntimeError(f"OpenRouter returned invalid JSON (Status {response.status_code}). Raw response: {response.text[:500]}...")
+    except Exception as e:
+        raise RuntimeError(f"Image generation failed: {str(e)}")
 
-
-def _generate_image(
-    prompt: str,
-    negative: str,
-    width: int,
-    height: int,
-    fmt: Literal["JPEG", "WEBP", "PNG"],
-    seed: int,
-    quality: Optional[int] = None,
-) -> Image.Image:
-    raw = _openrouter_post(prompt, negative, f"{width}x{height}", fmt.lower(), seed, quality)
-    return Image.open(io.BytesIO(raw)).convert("RGB")
-
-
-def tool_generate_hero(
-    city: str,
-    country: str,
-    theme_keywords: Iterable[str] | str | None = None,
-    style_preset: Optional[str] = None,
-    trip_name: Optional[str] = None,
-    trip_folder: Optional[str] = None,
-    width: int = 1920,
-    height: int = 1080,
-    fmt: Literal["JPEG", "WEBP", "PNG"] = "JPEG",
-    max_kb: int = 500,
-    quality: int = 85,
-    shots: int = 1,
-    seed: int = 0,
+def _process_and_upload(
+    raw_bytes: bytes, 
+    trip_code: str, 
+    prefix: str, 
+    target_width: int, 
+    target_height: int
 ) -> str:
-    _require_env()
-    folder = _build_folder(trip_name, trip_folder)
-    p, n = build_hero_prompt(city, country, theme_keywords)
-    if style_preset:
-        p = f"{style_preset} style, {p}"
-    imgs = []
-    for _ in range(max(1, shots)):
-        img = _generate_image(p, n, width, height, fmt, seed if seed else 0)
-        imgs.append(img)
-    img = max(imgs, key=lambda im: im.size[0] * im.size[1])
-    img = _cover_resize(img, width, height)
-    ext = ".jpg" if fmt == "JPEG" else ".webp" if fmt == "WEBP" else ".png"
-    data = _encode(img, fmt, max_kb, quality)
-    ctype = "image/jpeg" if fmt == "JPEG" else "image/webp" if fmt == "WEBP" else "image/png"
-    key = _build_key(folder, f"hero_{int(time.time())}{ext}")
-    return _supabase_upload(data, key, ctype)
+    """Resizes (if needed), converts to JPEG, and uploads."""
+    try:
+        img = Image.open(io.BytesIO(raw_bytes))
+        
+        # Ensure RGB
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+            
+        # Resize if dimensions don't match exactly (OpenRouter might return nearest supported size)
+        if img.size != (target_width, target_height):
+            img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+            
+        output = io.BytesIO()
+        img.save(output, format="JPEG", quality=90, optimize=True)
+        jpeg_bytes = output.getvalue()
+        
+        filename = f"{prefix}_{int(time.time())}.jpg"
+        return _upload_to_supabase(jpeg_bytes, trip_code, filename, "image/jpeg")
+        
+    except Exception as e:
+        raise RuntimeError(f"Failed to process/upload image: {str(e)}")
 
+# --- Public Tools ---
 
-def tool_generate_background(
-    activity: str,
-    city: str,
-    country: str,
-    mood_keywords: Iterable[str] | str | None = None,
-    style_preset: Optional[str] = None,
-    trip_name: Optional[str] = None,
-    trip_folder: Optional[str] = None,
-    width: int = 1920,
-    height: int = 1080,
-    fmt: Literal["JPEG", "WEBP", "PNG"] = "JPEG",
-    max_kb: int = 400,
-    quality: int = 80,
-    shots: int = 1,
-    seed: int = 0,
-) -> str:
-    _require_env()
-    folder = _build_folder(trip_name, trip_folder)
-    p, n = build_background_prompt(activity, city, country, mood_keywords)
-    if style_preset:
-        p = f"{style_preset} style, {p}"
-    imgs = []
-    for _ in range(max(1, shots)):
-        img = _generate_image(p, n, width, height, fmt, seed if seed else 0)
-        imgs.append(img)
-    img = max(imgs, key=lambda im: im.size[0] * im.size[1])
-    img = _cover_resize(img, width, height)
-    ext = ".jpg" if fmt == "JPEG" else ".webp" if fmt == "WEBP" else ".png"
-    data = _encode(img, fmt, max_kb, quality)
-    ctype = "image/jpeg" if fmt == "JPEG" else "image/webp" if fmt == "WEBP" else "image/png"
-    key = _build_key(folder, f"background_{int(time.time())}{ext}")
-    return _supabase_upload(data, key, ctype)
+def generate_hero(trip_code: str, prompt: str, city: str, country: str) -> str:
+    """
+    Generates a high-quality Hero image (1920x1080).
+    """
+    width, height = 1920, 1080
+    
+    # Enhanced prompt for Hero quality
+    enhanced_prompt = (
+        f"Hero image of {city}, {country}. {prompt}. "
+        "Cinematic lighting, wide angle, high resolution, photorealistic, "
+        "travel photography, vibrant colors, 8k, highly detailed."
+    )
+    
+    raw_bytes = _generate_image_openrouter(enhanced_prompt, width, height)
+    return _process_and_upload(raw_bytes, trip_code, "hero", width, height)
 
+def generate_background(trip_code: str, prompt: str, city: str, country: str) -> str:
+    """
+    Generates a Background image (1920x1080), optimized for opacity/overlay.
+    """
+    width, height = 1920, 1080
+    
+    # Enhanced prompt for Background (softer, less busy)
+    enhanced_prompt = (
+        f"Background texture image of {city}, {country}. {prompt}. "
+        "Soft focus, blurred background, atmospheric, minimal details, "
+        "suitable for text overlay, muted tones, travel theme."
+    )
+    
+    raw_bytes = _generate_image_openrouter(enhanced_prompt, width, height)
+    return _process_and_upload(raw_bytes, trip_code, "background", width, height)
 
-def tool_generate_slider(
-    subject: str,
-    place: str,
-    city: str,
-    country: str,
-    style_preset: Optional[str] = None,
-    trip_name: Optional[str] = None,
-    trip_folder: Optional[str] = None,
-    width: int = 800,
-    height: int = 600,
-    fmt_site: Literal["WEBP", "JPEG", "PNG"] = "WEBP",
-    max_kb: int = 150,
-    quality: int = 80,
-    shots: int = 1,
-    seed: int = 0,
-) -> str:
-    _require_env()
-    folder = _build_folder(trip_name, trip_folder)
-    p, n = build_slider_prompt(subject, place, city, country)
-    if style_preset:
-        p = f"{style_preset} style, {p}"
-    imgs = []
-    for _ in range(max(1, shots)):
-        img = _generate_image(p, n, width, height, fmt_site, seed if seed else 0)
-        imgs.append(img)
-    img = max(imgs, key=lambda im: im.size[0] * im.size[1])
-    img = _cover_resize(img, width, height)
-    ext = ".webp" if fmt_site == "WEBP" else ".jpg" if fmt_site == "JPEG" else ".png"
-    data = _encode(img, fmt_site if fmt_site in ("WEBP", "JPEG") else "PNG", max_kb, quality)
-    ctype = "image/webp" if fmt_site == "WEBP" else "image/jpeg" if fmt_site == "JPEG" else "image/png"
-    key = _build_key(folder, f"slider_{int(time.time())}{ext}")
-    return _supabase_upload(data, key, ctype)
+def generate_slider(trip_code: str, prompt: str, city: str, country: str) -> str:
+    """
+    Generates a Slider image (800x600).
+    """
+    width, height = 800, 600
+    
+    # Enhanced prompt for Slider (descriptive)
+    enhanced_prompt = (
+        f"Travel photo of {city}, {country}. {prompt}. "
+        "Photorealistic, clear focus, beautiful composition, "
+        "daylight, travel guide style."
+    )
+    
+    raw_bytes = _generate_image_openrouter(enhanced_prompt, width, height)
+    return _process_and_upload(raw_bytes, trip_code, "slider", width, height)
