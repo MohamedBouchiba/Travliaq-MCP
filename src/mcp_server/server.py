@@ -215,19 +215,39 @@ def create_mcp() -> FastMCP:
         shots: int = 1,
         seed: int = 0,
         ctx: Context = None
-    ) -> str:
-        """Héro 1920x1080 généré via OpenRouter puis uploadé dans Supabase/TRIPS/<trip_folder>/.
+    ) -> Dict[str, Any]:
+        """Génère une image hero 1920x1080 pour le voyage.
 
-        - Requis : `city`, `country`. Optionnels : `theme_keywords`/`style_preset` pour l'ambiance ; `trip_name`/`trip_folder` pour grouper les assets.
-        - Compression : `fmt` (JPEG/WEBP), `max_kb`, `quality`, `shots` et `seed` pour la reproductibilité.
-        - Prérequis serveur : clés OPENROUTER + SUPABASE et bucket configuré.
-        - Retour : URL publique de l'image.
+        Cette image est utilisée comme main_image du trip dans le JSON final.
+
+        ARGUMENTS OBLIGATOIRES:
+        - city (str): Ville de destination (ex: "New York", "Paris")
+        - country (str): Pays (ex: "United States", "France")
+
+        ARGUMENTS OPTIONNELS:
+        - trip_name (str): Nom du voyage pour organiser les fichiers
+        - trip_folder (str): Dossier pour grouper tous les assets du trip
+
+        RETOUR:
+        {
+          "url": "https://supabase.url/.../hero_123456.jpg",
+          "type": "hero",
+          "usage": "main_image"
+        }
+
+        UTILISATION DANS LE JSON:
+        {
+          "code": "NYC2025",
+          "destination": "New York",
+          "main_image": "<url retournée>",
+          ...
+        }
         """
         try:
             if ctx:
                 await ctx.info(f"Generating hero image for {city}, {country}")
-            
-            result = imgs.tool_generate_hero(
+
+            url = imgs.tool_generate_hero(
                 city=city,
                 country=country,
                 theme_keywords=theme_keywords,
@@ -242,15 +262,21 @@ def create_mcp() -> FastMCP:
                 shots=shots,
                 seed=seed,
             )
-            
+
             if ctx:
-                await ctx.info("Hero image generated and uploaded successfully")
-            
-            return result
+                await ctx.info(f"Hero image generated: {url}")
+
+            return {
+                "url": url,
+                "type": "hero",
+                "usage": "main_image",
+                "city": city,
+                "country": country
+            }
         except Exception as e:
             if ctx:
                 await ctx.error(f"Hero image generation failed: {str(e)}")
-            raise
+            raise RuntimeError(f"Failed to generate hero image: {str(e)}")
 
     @mcp.tool(name="images.background")
     async def images_background(
@@ -269,18 +295,46 @@ def create_mcp() -> FastMCP:
         shots: int = 1,
         seed: int = 0,
         ctx: Context = None
-    ) -> str:
-        """Background 1920x1080 pour une activité, uploadé dans Supabase/TRIPS/<trip_folder>/.
+    ) -> Dict[str, Any]:
+        """Génère une image de fond 1920x1080 pour une étape d'activité.
 
-        - Requis : `activity`, `city`, `country`. Optionnels : `mood_keywords`/`style_preset` ; `trip_name`/`trip_folder` pour aligner avec le héro.
-        - Paramètres de sortie : `fmt`, `max_kb`, `quality`, `shots`, `seed` similaires à `images.hero`.
-        - Retour : URL publique.
+        Cette image est utilisée comme main_image d'une step dans le JSON final.
+
+        ARGUMENTS OBLIGATOIRES:
+        - activity (str): Description de l'activité (ex: "visiting Central Park", "dinner at Times Square")
+        - city (str): Ville (ex: "New York")
+        - country (str): Pays (ex: "United States")
+
+        ARGUMENTS OPTIONNELS:
+        - trip_name (str): Nom du voyage (doit correspondre au hero)
+        - trip_folder (str): Dossier (doit correspondre au hero pour grouper les assets)
+
+        RETOUR:
+        {
+          "url": "https://supabase.url/.../background_123456.jpg",
+          "type": "background",
+          "usage": "step_main_image",
+          "activity": "visiting Central Park"
+        }
+
+        UTILISATION DANS LE JSON:
+        {
+          "steps": [
+            {
+              "step_number": 1,
+              "day_number": 1,
+              "title": "Central Park Walk",
+              "main_image": "<url retournée>",
+              ...
+            }
+          ]
+        }
         """
         try:
             if ctx:
-                await ctx.info(f"Generating background image for activity: {activity} in {city}, {country}")
-            
-            result = imgs.tool_generate_background(
+                await ctx.info(f"Generating background image for: {activity} in {city}, {country}")
+
+            url = imgs.tool_generate_background(
                 activity=activity,
                 city=city,
                 country=country,
@@ -296,15 +350,22 @@ def create_mcp() -> FastMCP:
                 shots=shots,
                 seed=seed,
             )
-            
+
             if ctx:
-                await ctx.info("Background image generated and uploaded successfully")
-            
-            return result
+                await ctx.info(f"Background image generated: {url}")
+
+            return {
+                "url": url,
+                "type": "background",
+                "usage": "step_main_image",
+                "activity": activity,
+                "city": city,
+                "country": country
+            }
         except Exception as e:
             if ctx:
                 await ctx.error(f"Background image generation failed: {str(e)}")
-            raise
+            raise RuntimeError(f"Failed to generate background image: {str(e)}")
 
     @mcp.tool(name="images.slider")
     async def images_slider(
