@@ -124,7 +124,10 @@ def _openrouter_post(
         except Exception:
             detail = r.text
         raise RuntimeError(f"OpenRouter image error {r.status_code}: {detail}")
-    data = r.json()
+    try:
+        data = r.json()
+    except Exception:
+        raise RuntimeError(f"OpenRouter returned invalid JSON (status {r.status_code}): {r.text[:500]}")
     items = data.get("data") or []
     if not items:
         raise RuntimeError("OpenRouter image response missing data")
