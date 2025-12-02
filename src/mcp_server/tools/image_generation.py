@@ -59,8 +59,11 @@ def _upload_to_supabase(image_data: bytes, trip_code: str, filename: str, conten
     return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{storage_path}"
 
 def _generate_image_openrouter(prompt: str, width: int, height: int) -> bytes:
-    """Calls OpenRouter API to generate an image."""
+    """Calls OpenRouter Chat API to generate an image (NanoBanana/Gemini)."""
     _validate_env()
+    
+    # Use Chat Completions for Gemini/NanoBanana
+    url = "https://openrouter.ai/api/v1/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {OPENROUTER_KEY}",
@@ -69,16 +72,29 @@ def _generate_image_openrouter(prompt: str, width: int, height: int) -> bytes:
         "Content-Type": "application/json"
     }
     
+    # Determine aspect ratio for the prompt
+    ratio = "16:9" if width > height else "4:3" if width < height else "1:1"
+    
+    # Construct prompt with strict visual instructions
+    final_prompt = (
+        f"Generate an image. {prompt} "
+        f"Aspect ratio {ratio}. "
+        "Do not include any text in the image. "
+        "Return ONLY the image."
+    )
+
     payload = {
         "model": DEFAULT_MODEL,
-        "prompt": prompt,
-        "n": 1,
-        "size": f"{width}x{height}",
-        "response_format": "b64_json"
+        "messages": [
+            {"role": "user", "content": final_prompt}
+        ],
+        # OpenRouter specific for multimodal generation
+        # "modalities": ["image", "text"] # Some docs say this, others don't. trying without first or with?
+        # Let's try standard chat first. If it fails, we might need specific params.
     }
     
     try:
-        response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=120)
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
         
         if response.status_code != 200:
             try:
@@ -90,15 +106,31 @@ def _generate_image_openrouter(prompt: str, width: int, height: int) -> bytes:
             
         data = response.json()
         
-        # Robustly parse response
-        if "data" not in data or not data["data"]:
-             raise RuntimeError(f"OpenRouter returned no data. Response: {data}")
+        # Extract content
+        if "choices" not in data or not data["choices"]:
+             raise RuntimeError(f"OpenRouter returned no choices. Response: {data}")
              
-        b64_data = data["data"][0].get("b64_json")
-        if not b64_data:
-             raise RuntimeError("OpenRouter response missing 'b64_json' field.")
+        content = data["choices"][0]["message"]["content"]
+        
+        # Look for URL in content (Markdown or plain)
+        # Regex for http/https url ending in image extension or just a url
+        import re
+        # Simple regex to find a URL. Gemini often returns "Here is the image: https://..."
+        url_match = re.search(r'(https?://[^\s\)]+)', content)
+        
+        if not url_match:
+             # Check if there is an 'image' field in the message (non-standard but possible)
+             # Or maybe base64?
+             raise RuntimeError(f"No image URL found in response: {content[:200]}...")
              
-        return base64.b64decode(b64_data)
+        image_url = url_match.group(1)
+        
+        # Download the image
+        img_response = requests.get(image_url, timeout=60)
+        if img_response.status_code != 200:
+            raise RuntimeError(f"Failed to download generated image from {image_url}: {img_response.status_code}")
+            
+        return img_response.content
         
     except requests.exceptions.JSONDecodeError:
         raise RuntimeError(f"OpenRouter returned invalid JSON (Status {response.status_code}). Raw response: {response.text[:500]}...")
