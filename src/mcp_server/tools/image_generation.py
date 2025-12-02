@@ -17,7 +17,7 @@ SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "TRIPS")
 
 # Constants
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/images/generations"
-DEFAULT_MODEL = "google/nanobanana-mini-flash" # As requested by user
+DEFAULT_MODEL = "google/gemini-2.5-flash-image-preview" # Correct ID for NanoBanana/Gemini Flash
 SITE_URL = os.getenv("OPENROUTER_SITE", "https://travliaq.local")
 APP_NAME = "Travliaq Image Generator"
 
@@ -73,24 +73,21 @@ def _generate_image_openrouter(prompt: str, width: int, height: int) -> bytes:
     }
     
     # Determine aspect ratio for the prompt
+    # Supported: 1:1, 16:9, 4:3, etc.
     ratio = "16:9" if width > height else "4:3" if width < height else "1:1"
     
-    # Construct prompt with strict visual instructions
-    final_prompt = (
-        f"Generate an image. {prompt} "
-        f"Aspect ratio {ratio}. "
-        "Do not include any text in the image. "
-        "Return ONLY the image."
-    )
-
     payload = {
         "model": DEFAULT_MODEL,
         "messages": [
-            {"role": "user", "content": final_prompt}
+            {
+                "role": "user",
+                "content": prompt
+            }
         ],
-        # OpenRouter specific for multimodal generation
-        # "modalities": ["image", "text"] # Some docs say this, others don't. trying without first or with?
-        # Let's try standard chat first. If it fails, we might need specific params.
+        "modalities": ["image", "text"],
+        "image_config": {
+            "aspect_ratio": ratio
+        }
     }
     
     try:
@@ -106,31 +103,37 @@ def _generate_image_openrouter(prompt: str, width: int, height: int) -> bytes:
             
         data = response.json()
         
-        # Extract content
+        # Parse response according to documentation
+        # choices[0].message.images[0].image_url.url (Base64 data URL)
+        
         if "choices" not in data or not data["choices"]:
              raise RuntimeError(f"OpenRouter returned no choices. Response: {data}")
              
-        content = data["choices"][0]["message"]["content"]
+        message = data["choices"][0]["message"]
         
-        # Look for URL in content (Markdown or plain)
-        # Regex for http/https url ending in image extension or just a url
-        import re
-        # Simple regex to find a URL. Gemini often returns "Here is the image: https://..."
-        url_match = re.search(r'(https?://[^\s\)]+)', content)
-        
-        if not url_match:
-             # Check if there is an 'image' field in the message (non-standard but possible)
-             # Or maybe base64?
-             raise RuntimeError(f"No image URL found in response: {content[:200]}...")
+        # Check for images field
+        if "images" not in message or not message["images"]:
+             # Fallback: sometimes models return text if they refuse or fail to generate
+             content = message.get("content", "")
+             raise RuntimeError(f"No images returned. Model output: {content}")
              
-        image_url = url_match.group(1)
+        image_obj = message["images"][0]
+        image_url = image_obj.get("image_url", {}).get("url")
         
-        # Download the image
-        img_response = requests.get(image_url, timeout=60)
-        if img_response.status_code != 200:
-            raise RuntimeError(f"Failed to download generated image from {image_url}: {img_response.status_code}")
-            
-        return img_response.content
+        if not image_url:
+             raise RuntimeError("Image object missing 'url' field.")
+             
+        # Handle Base64 Data URL
+        if image_url.startswith("data:image"):
+            # Format: data:image/png;base64,iVBORw0KGgo...
+            header, encoded = image_url.split(",", 1)
+            return base64.b64decode(encoded)
+        else:
+            # Handle regular URL if returned (though docs say base64 for this model usually)
+            img_response = requests.get(image_url, timeout=60)
+            if img_response.status_code != 200:
+                raise RuntimeError(f"Failed to download generated image from {image_url}")
+            return img_response.content
         
     except requests.exceptions.JSONDecodeError:
         raise RuntimeError(f"OpenRouter returned invalid JSON (Status {response.status_code}). Raw response: {response.text[:500]}...")
