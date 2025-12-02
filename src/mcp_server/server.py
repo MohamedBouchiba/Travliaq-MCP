@@ -212,13 +212,15 @@ def create_mcp() -> FastMCP:
         Cette image est la bannière principale. Elle doit être spectaculaire, inspirante et de très haute qualité.
         
         Args:
-            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025"). Sert à organiser les fichiers.
-            prompt: Description VISUELLE détaillée de la scène. (ex: "Vue panoramique dorée du temple Kinkaku-ji se reflétant dans l'étang au coucher du soleil").
+            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025"). DOIT être identique pour toutes les images d'un même voyage.
+            prompt: Description VISUELLE détaillée de la scène.
+                    EXEMPLE: "Vue panoramique époustouflante du Mont Fuji au lever du soleil, cerisiers en fleurs au premier plan, lumière dorée, haute résolution, photoréaliste."
+                    NE PAS inclure de demande de texte dans l'image.
             city: La ville du voyage.
             country: Le pays du voyage.
         
         Returns:
-            Dict contenant l'URL de l'image générée et ses métadonnées.
+            Dict contenant l'URL de l'image générée (hébergée sur Supabase) et ses métadonnées.
         """
         try:
             if ctx:
@@ -255,10 +257,15 @@ def create_mcp() -> FastMCP:
         Elle doit être texturée, atmosphérique, et PAS trop chargée visuellement pour ne pas gêner la lecture du texte par dessus.
         
         Args:
-            trip_code: Le code unique du voyage.
-            prompt: Description de l'ambiance ou de la texture. (ex: "Flou artistique des lumières de la ville de nuit, bokeh doux, tons bleus et violets").
+            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025").
+            prompt: Description de l'ambiance, de la texture ou du paysage flou.
+                    EXEMPLE: "Texture abstraite de vagues océaniques, tons bleu profond et turquoise, style minimaliste, flou artistique, pas de détails nets."
+                    IMPORTANT: L'image doit être sombre ou peu contrastée pour servir de fond.
             city: La ville.
             country: Le pays.
+            
+        Returns:
+            Dict contenant l'URL de l'image générée.
         """
         try:
             if ctx:
@@ -291,13 +298,17 @@ def create_mcp() -> FastMCP:
     ) -> Dict[str, Any]:
         """Génère une image illustrative pour un carrousel (800x600).
 
-        Utilisé pour illustrer des activités spécifiques ou des lieux. Style "reportage voyage".
+        Utilisé pour illustrer des activités spécifiques, des plats culinaires, ou des détails culturels. Style "reportage voyage" ou "photo documentaire".
         
         Args:
-            trip_code: Le code unique du voyage.
-            prompt: Description de l'activité ou du lieu spécifique. (ex: "Gros plan sur un plat de sushis frais servis sur une planche en bois").
+            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025").
+            prompt: Description de l'activité ou du lieu spécifique.
+                    EXEMPLE: "Gros plan macro sur un bol de ramen fumant, baguettes tenant des nouilles, éclairage chaleureux de restaurant, profondeur de champ."
             city: La ville.
             country: Le pays.
+            
+        Returns:
+            Dict contenant l'URL de l'image générée.
         """
         try:
             if ctx:
