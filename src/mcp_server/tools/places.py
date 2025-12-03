@@ -144,8 +144,15 @@ async def _http_get_nominatim(
     params: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     """HTTP GET spécifique pour Nominatim OSM avec User-Agent obligatoire."""
+    
+    # 🌍 Forcer les résultats en ANGLAIS
+    headers = {
+        **NOMINATIM_HEADERS,
+        "Accept-Language": "en"  # Force English names
+    }
+    
     async with httpx.AsyncClient(
-        headers=NOMINATIM_HEADERS,
+        headers=headers,
         timeout=httpx.Timeout(20.0),
         follow_redirects=True,
         trust_env=False,
