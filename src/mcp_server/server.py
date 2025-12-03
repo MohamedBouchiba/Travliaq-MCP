@@ -16,20 +16,69 @@ def create_mcp() -> FastMCP:
 
     @mcp.tool(name="geo.text_to_place")
     async def geo_text_to_place(query: str, country: str | None = None, max_results: int = 5, ctx: Context = None):
-        """Géocode un lieu écrit (ville/région) en coordonnées GPS.
-
-        - À utiliser en amont de tout appel météo/vols pour obtenir lat/lon fiables.
-        - Arguments : `query` obligatoire ; `country` (ISO-2) optionnel pour restreindre ; `max_results` pour limiter la liste.
-        - Retour : liste de lieux {name, country, latitude, longitude, timezone, population, ...}.
+        """🌍 Convertit un NOM DE LIEU en coordonnées GPS (latitude/longitude).
+        
+        📋 **QUAND UTILISER:**
+        - Avant d'appeler weather.by_coords, flights.prices, ou climate tools
+        - Pour obtenir les coordonnées GPS d'une ville, monument, ou région
+        - En début de workflow pour valider qu'un lieu existe
+        
+        ✅ **EXEMPLES D'UTILISATION:**
+        
+        1. Simple ville:
+           geo.text_to_place(query="Paris")
+           → Retourne: [{"name": "Paris", "country": "France", "latitude": 48.8566, "longitude": 2.3522, ...}]
+        
+        2. Ville + pays (RECOMMANDÉ pour éviter ambiguïté):
+           geo.text_to_place(query="Lisbon, Portugal")
+           → Retourne: [{"name": "Lisbon", "country": "Portugal", "latitude": 38.7223, "longitude": -9.1393, ...}]
+        
+        3. Monument/Landmark:
+           geo.text_to_place(query="Tour Eiffel, Paris")
+           → Retourne GPS de la Tour Eiffel
+        
+        4. Avec filtre pays (ISO-2):
+           geo.text_to_place(query="Springfield", country="US", max_results=3)
+           → Limite résultats aux USA uniquement
+        
+        ⚠️ **ERREURS COURANTES À ÉVITER:**
+        - ❌ Query vide: geo.text_to_place(query="") → ERREUR
+        - ❌ Nom mal orthographié: geo.text_to_place(query="Lisbonne") → Peut échouer
+          ✅ SOLUTION: Utiliser nom anglais: geo.text_to_place(query="Lisbon")
+        - ❌ Trop spécifique: "Belem Tower, Lisbon, Portugal, Europe" → Simplifie!
+          ✅ SOLUTION: geo.text_to_place(query="Belem Tower, Lisbon")
+        
+        📤 **FORMAT DE RETOUR:**
+        [
+          {
+            "name": "Lisbon",
+            "country": "Portugal",
+            "admin1": "Lisboa",
+            "latitude": 38.7223,
+            "longitude": -9.1393,
+            "timezone": "Europe/Lisbon",
+            "population": 517802
+          },
+          ...autres résultats si max_results > 1
+        ]
+        
+        💡 **ASTUCE:** Utilise TOUJOURS le premier résultat [0] sauf si tu cherches une ville spécifique parmi plusieurs homonymes.
+        
+        🔄 **SI ÉCHEC:** Essaye une requête plus simple (ex: "Lisbon" au lieu de "Lisbonne, Portugal").
         """
         try:
             if ctx:
-                await ctx.info(f"Geocoding query: {query}")
-            return await g.geocode_text(query, max_results, country)
-        except Exception as e:
+                await ctx.info(f"🔍 Geocoding: '{query}'" + (f" (country={country})" if country else ""))
+            results = await g.geocode_text(query, max_results, country)
             if ctx:
-                await ctx.error(f"Geocoding failed: {str(e)}")
-            raise
+                await ctx.info(f"✅ Trouvé {len(results)} résultat(s)")
+            return results
+        except Exception as e:
+            error_msg = f"❌ Geocoding échoué pour '{query}': {str(e)}"
+            if ctx:
+                await ctx.error(error_msg)
+            # Relayer l'exception avec le message d'erreur détaillé
+            raise Exception(error_msg) from e
 
     @mcp.tool(name="places.overview")
     async def places_overview(

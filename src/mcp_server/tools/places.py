@@ -25,35 +25,102 @@ async def _http_get(
     retries: int = 2,
     backoff: float = 1.5,
 ) -> Dict[str, Any]:
+    """HTTP GET with retries and detailed error messages."""
     last_err: Exception | None = None
     async with httpx.AsyncClient(
         headers=USER_AGENT,
         timeout=httpx.Timeout(timeout),
         follow_redirects=True,
         trust_env=False,
-
     ) as client:
         for attempt in range(retries + 1):
             try:
                 resp = await client.get(url, params=params)
                 resp.raise_for_status()
-                return resp.json()
-            except Exception as exc:  # pragma: no cover - network failures exercised via retries
-                last_err = exc
+                data = resp.json()
+                
+                # ✅ VALIDATION: Vérifier que l'API a retourné vraiment des données
+                if not data or (isinstance(data, dict) and not data.get("results")):
+                    # Si aucun résultat, ce n'est pas une erreur côté serveur
+                    return data if data else {}
+                
+                return data
+            except httpx.HTTPStatusError as exc:
+                # Erreurs HTTP 4xx/5xx
+                status = exc.response.status_code
+                last_err = GeoError(
+                    f"API HTTP {status}: {exc.response.text[:200]}. "
+                    f"URL: {url}. Params: {params}"
+                )
                 if attempt == retries:
                     break
                 await asyncio.sleep(backoff**attempt)
-    raise GeoError(str(last_err))
+            except httpx.TimeoutException as exc:
+                # Timeout réseau
+                last_err = GeoError(
+                    f"Timeout après {timeout}s. "
+                    f"L'API météo est peut-être surchargée. URL: {url}"
+                )
+                if attempt == retries:
+                    break
+                await asyncio.sleep(backoff**attempt)
+            except Exception as exc:
+                # Autres erreurs (réseau, JSON, etc.)
+                last_err = GeoError(
+                    f"Erreur inattendue: {type(exc).__name__}: {str(exc)}. "
+                    f"URL: {url}"
+                )
+                if attempt == retries:
+                    break
+                await asyncio.sleep(backoff**attempt)
+    
+    # Lever l'erreur finale avec le message détaillé
+    raise last_err if last_err else GeoError("Unknown error")
 
 
 async def geocode_text(query: str, count: int = 5, country: Optional[str] = None) -> List[Dict[str, Any]]:
-    if not query:
-        raise GeoError("query required")
+    """Géocode un nom de lieu en coordonnées GPS.
+    
+    Args:
+        query: Nom du lieu (ex: "Paris", "Tokyo Tower", "Lisbon, Portugal")
+        count: Nombre maximum de résultats (1-10)
+        country: Code pays ISO-2 optionnel pour filtrer (ex: "FR", "PT", "JP")
+    
+    Returns:
+        Liste de lieux avec name, country, latitude, longitude, etc.
+        
+    Raises:
+        GeoError: Si le lieu n'est pas trouvé ou erreur API
+    """
+    if not query or not query.strip():
+        raise GeoError(
+            "❌ Query vide. "
+            "Exemples valides: 'Paris', 'Tokyo Tower', 'Lisbon Portugal'"
+        )
+    
+    query = query.strip()
     params = {"name": query, "count": max(1, min(count, 10))}
     if country:
-        params["country"] = country
-    data = await _http_get(GEOCODE_URL, params)
+        params["country"] = country.upper()[:2]  # Normaliser le code pays
+    
+    try:
+        data = await _http_get(GEOCODE_URL, params)
+    except GeoError:
+        raise  # Relayer l'erreur avec le message détaillé
+    
     results = data.get("results") or []
+    
+    # ✅ MEILLEUR MESSAGE: Si aucun résultat trouvé
+    if not results:
+        suggestion = (
+            f"Lieu '{query}' introuvable. "
+            f"Suggestions: Essayez un nom plus simple (ex: 'Lisbon' au lieu de 'Lisbonne'), "
+            f"ou ajoutez le pays (ex: 'Lisbon, Portugal')"
+        )
+        if country:
+            suggestion += f". Code pays utilisé: {country.upper()}"
+        raise GeoError(suggestion)
+    
     out: List[Dict[str, Any]] = []
     for item in results:
         out.append(
