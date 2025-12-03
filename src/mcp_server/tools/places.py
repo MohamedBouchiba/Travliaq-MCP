@@ -7,7 +7,9 @@ import httpx
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 CLIMATE_URL = "https://climate-api.open-meteo.com/v1/climate"
 AIRPORTS_DATA_URL = "https://raw.githubusercontent.com/mwgg/Airports/master/airports.json"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = {"User-Agent": "travliaq-geo-tool/1.0"}
+NOMINATIM_HEADERS = {"User-Agent": "Travliaq-MCP/1.0 (travel planning assistant; contact@travliaq.com)"}
 NO_PROXY = {"http": None, "https": None}
 
 _AIRPORTS: List[Dict[str, Any]] | None = None
@@ -135,6 +137,142 @@ async def geocode_text(query: str, count: int = 5, country: Optional[str] = None
             }
         )
     return out
+
+
+async def _http_get_nominatim(
+    url: str,
+    params: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """HTTP GET spécifique pour Nominatim OSM avec User-Agent obligatoire."""
+    async with httpx.AsyncClient(
+        headers=NOMINATIM_HEADERS,
+        timeout=httpx.Timeout(20.0),
+        follow_redirects=True,
+        trust_env=False,
+    ) as client:
+        try:
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            raise GeoError(
+                f"Nominatim API HTTP {status}: {exc.response.text[:200]}"
+            )
+        except httpx.TimeoutException:
+            raise GeoError(
+                f"Nominatim API timeout (>20s). Réessayez dans 1-2 secondes."
+            )
+        except Exception as exc:
+            raise GeoError(f"Nominatim API error: {type(exc).__name__}: {exc}")
+
+
+async def geocode_specific_place(
+    query: str,
+    country: Optional[str] = None,
+    max_results: int = 3
+) -> List[Dict[str, Any]]:
+    """
+    Géocode un LIEU SPÉCIFIQUE (monument, attraction, restaurant, POI)
+    via Nominatim OpenStreetMap.
+    
+    Args:
+        query: Nom complet du lieu (ex: "Tokyo Skytree, Tokyo, Japan", 
+               "Atomium, Brussels, Belgium")
+        country: Code pays ISO-2 optionnel pour filtrer (ex: "JP", "BE")
+        max_results: Nombre de résultats (1-10)
+    
+    Returns:
+        Liste de lieux avec name, display_name, latitude, longitude, type, etc.
+        
+    Raises:
+        GeoError: Si le lieu n'est pas trouvé ou erreur API
+    
+    Examples:
+        >>> await geocode_specific_place("Atomium, Brussels, Belgium")
+        [{
+          "name": "Atomium",
+          "display_name": "Atomium, Laken, Bruxelles-Capitale, Belgique",
+          "latitude": 50.8948,
+          "longitude": 4.3418,
+          "type": "attraction",
+          "category": "tourism",
+          "importance": 0.8
+        }]
+        
+        >>> await geocode_specific_place("Tokyo Skytree, Tokyo")
+        [{
+          "name": "東京スカイツリー",
+          "display_name": "Tokyo Skytree, Sumida, Tokyo, Japan",
+          "latitude": 35.7101,
+          "longitude": 139.8107,
+          "type": "tower",
+          "category": "tourism"
+        }]
+    """
+    if not query or not query.strip():
+        raise GeoError(
+            "❌ Query vide. "
+            "Exemples: 'Atomium, Brussels', 'Tokyo Skytree, Tokyo, Japan'"
+        )
+    
+    query = query.strip()
+    params = {
+        "q": query,
+        "format": "json",
+        "limit": max(1, min(max_results, 10)),
+        "addressdetails": 1,
+        "extratags": 1,
+        "namedetails": 1,
+    }
+    
+    if country:
+        params["countrycodes"] = country.lower()[:2]
+    
+    # 🚨 IMPORTANT: Nominatim exige un délai entre requêtes (max 1/sec)
+    # Respecter leur politique d'utilisation
+    await asyncio.sleep(1.0)
+    
+    try:
+        data = await _http_get_nominatim(NOMINATIM_URL, params)
+    except GeoError:
+        raise
+    
+    if not data:
+        suggestion = (
+            f"Lieu spécifique '{query}' introuvable dans OpenStreetMap. "
+            f"Suggestions: "
+            f"Vérifiez l'orthographe, ajoutez la ville et le pays "
+            f"(ex: 'Atomium, Brussels, Belgium' au lieu de juste 'Atomium')"
+        )
+        if country:
+            suggestion += f". Code pays utilisé: {country.upper()}"
+        raise GeoError(suggestion)
+    
+    results = []
+    for item in data:
+        # Extraire le nom le plus pertinent
+        name = (
+            item.get("name") 
+            or item.get("namedetails", {}).get("name")
+            or item.get("display_name", "").split(",")[0]
+        )
+        
+        results.append({
+            "name": name,
+            "display_name": item.get("display_name", ""),
+            "latitude": float(item.get("lat", 0)),
+            "longitude": float(item.get("lon", 0)),
+            "type": item.get("type", ""),
+            "category": item.get("class", ""),
+            "importance": item.get("importance", 0),
+            "osm_id": item.get("osm_id"),
+            "osm_type": item.get("osm_type"),
+            "address": item.get("address", {}),
+        })
+    
+    return results
+
 
 
 async def _load_airports() -> List[Dict[str, Any]]:

@@ -14,39 +14,34 @@ def create_mcp() -> FastMCP:
         version="1.0.0"
     )
 
-    @mcp.tool(name="geo.text_to_place")
-    async def geo_text_to_place(query: str, country: str | None = None, max_results: int = 5, ctx: Context = None):
-        """🌍 Convertit un NOM DE LIEU en coordonnées GPS (latitude/longitude).
+    @mcp.tool(name="geo.city")
+    async def geo_city(query: str, country: str | None = None, max_results: int = 5, ctx: Context = None):
+        """🏙️ Géocode une VILLE ou un PAYS en coordonnées GPS.
         
         📋 **QUAND UTILISER:**
-        - Avant d'appeler weather.by_coords, flights.prices, ou climate tools
-        - Pour obtenir les coordonnées GPS d'une ville, monument, ou région
-        - En début de workflow pour valider qu'un lieu existe
+        - Pour obtenir GPS d'une ville: "Paris", "Tokyo", "Lisbon"
+        - Pour une région/province: "Provence, France", "Hokkaido, Japan"
+        - Pour un pays entier: "Portugal", "Japan", "Belgium"
+        - Avant d'appeler weather, flights, climate, ou airports tools
         
         ✅ **EXEMPLES D'UTILISATION:**
         
         1. Simple ville:
-           geo.text_to_place(query="Paris")
-           → Retourne: [{"name": "Paris", "country": "France", "latitude": 48.8566, "longitude": 2.3522, ...}]
+           geo.city(query="Tokyo")
+           → {"name": "Tokyo", "country": "Japan", "latitude": 35.6762, "longitude": 139.6503}
         
         2. Ville + pays (RECOMMANDÉ pour éviter ambiguïté):
-           geo.text_to_place(query="Lisbon, Portugal")
-           → Retourne: [{"name": "Lisbon", "country": "Portugal", "latitude": 38.7223, "longitude": -9.1393, ...}]
+           geo.city(query="Lisbon, Portugal")
+           → {"name": "Lisbon", "country": "Portugal", "latitude": 38.7223, "longitude": -9.1393}
         
-        3. Monument/Landmark:
-           geo.text_to_place(query="Tour Eiffel, Paris")
-           → Retourne GPS de la Tour Eiffel
-        
-        4. Avec filtre pays (ISO-2):
-           geo.text_to_place(query="Springfield", country="US", max_results=3)
+        3. Avec filtre pays (ISO-2):
+           geo.city(query="Springfield", country="US", max_results=3)
            → Limite résultats aux USA uniquement
         
-        ⚠️ **ERREURS COURANTES À ÉVITER:**
-        - ❌ Query vide: geo.text_to_place(query="") → ERREUR
-        - ❌ Nom mal orthographié: geo.text_to_place(query="Lisbonne") → Peut échouer
-          ✅ SOLUTION: Utiliser nom anglais: geo.text_to_place(query="Lisbon")
-        - ❌ Trop spécifique: "Belem Tower, Lisbon, Portugal, Europe" → Simplifie!
-          ✅ SOLUTION: geo.text_to_place(query="Belem Tower, Lisbon")
+        ⚠️ **NE PAS UTILISER POUR:**
+        - ❌ Monuments (ex: "Atomium") → Utiliser geo.place
+        - ❌ Attractions spécifiques (ex: "Tokyo Skytree") → Utiliser geo.place
+        - ❌ Restaurants, musées, POIs → Utiliser geo.place
         
         📤 **FORMAT DE RETOUR:**
         [
@@ -58,27 +53,102 @@ def create_mcp() -> FastMCP:
             "longitude": -9.1393,
             "timezone": "Europe/Lisbon",
             "population": 517802
-          },
-          ...autres résultats si max_results > 1
+          }
         ]
         
-        💡 **ASTUCE:** Utilise TOUJOURS le premier résultat [0] sauf si tu cherches une ville spécifique parmi plusieurs homonymes.
-        
-        🔄 **SI ÉCHEC:** Essaye une requête plus simple (ex: "Lisbon" au lieu de "Lisbonne, Portugal").
+        💡 **ASTUCE:** Utilise TOUJOURS le premier résultat [0] sauf si tu cherches parmi plusieurs villes homonymes.
         """
         try:
             if ctx:
-                await ctx.info(f"🔍 Geocoding: '{query}'" + (f" (country={country})" if country else ""))
+                await ctx.info(f"🏙️ Geocoding ville/pays: '{query}'" + (f" (country={country})" if country else ""))
             results = await g.geocode_text(query, max_results, country)
             if ctx:
                 await ctx.info(f"✅ Trouvé {len(results)} résultat(s)")
             return results
         except Exception as e:
-            error_msg = f"❌ Geocoding échoué pour '{query}': {str(e)}"
+            error_msg = f"❌ Geocoding ville/pays échoué pour '{query}': {str(e)}"
             if ctx:
                 await ctx.error(error_msg)
-            # Relayer l'exception avec le message d'erreur détaillé
             raise Exception(error_msg) from e
+
+    @mcp.tool(name="geo.place")
+    async def geo_place(query: str, country: str | None = None, max_results: int = 3, ctx: Context = None):
+        """🎯 Géocode un LIEU SPÉCIFIQUE (monument, attraction, POI, restaurant) via OpenStreetMap.
+        
+        📋 **QUAND UTILISER:**
+        - Pour obtenir GPS EXACT d'un monument: "Atomium, Brussels"
+        - Pour une attraction touristique: "Tokyo Skytree, Tokyo"
+        - Pour un musée: "Louvre Museum, Paris"
+        - Pour un temple/sanctuaire: "Senso-ji Temple, Asakusa, Tokyo"
+        - Pour un restaurant célèbre: "Sukiyabashi Jiro, Ginza, Tokyo"
+        - Pour tout POI (point d'intérêt) spécifique
+        
+        ✅ **EXEMPLES ULTRA-PRÉCIS:**
+        
+        1. Monument avec ville et pays:
+           geo.place(query="Atomium, Laken, Brussels, Belgium")
+           → GPS EXACT: {lat: 50.8948, lon: 4.3418}
+           → "display_name": "Atomium, Laken, Bruxelles-Capitale, Belgique"
+        
+        2. Attraction touristique avec quartier:
+           geo.place(query="Tokyo Skytree, Sumida, Tokyo, Japan")
+           → GPS EXACT: {lat: 35.7101, lon: 139.8107}
+        
+        3. Temple avec quartier:
+           geo.place(query="Senso-ji Temple, Asakusa, Tokyo")
+           → GPS EXACT du temple
+        
+        4. Tour/Monument célèbre:
+           geo.place(query="Eiffel Tower, Paris, France")
+           → GPS EXACT de la tour
+        
+        5. Restaurant étoilé:
+           geo.place(query="Sukiyabashi Jiro, Ginza, Tokyo")
+           → GPS EXACT du restaurant
+        
+        💡 **ASTUCES POUR MAXIMUM DE PRÉCISION:**
+        - ✅ Inclure le quartier: "Senso-ji, Asakusa, Tokyo" (meilleur que juste "Senso-ji, Tokyo")
+        - ✅ Inclure le pays: "Atomium, Brussels, Belgium" (évite confusion)
+        - ✅ Nom complet: "Tokyo Skytree" au lieu de "Skytree"
+        - ✅ Nom local + anglais: "Tour Eiffel" ou "Eiffel Tower" marchent tous les deux
+        
+        📤 **FORMAT DE RETOUR:**
+        [
+          {
+            "name": "Atomium",
+            "display_name": "Atomium, Laken, Bruxelles-Capitale, 1020, Belgique",
+            "latitude": 50.8948,
+            "longitude": 4.3418,
+            "type": "attraction",
+            "category": "tourism",
+            "importance": 0.801,
+            "osm_id": 123456789,
+            "address": {...}
+          }
+        ]
+        
+        ⚠️ **LIMITATIONS:**
+        - Délai de 1 seconde entre chaque requête (politique Nominatim OSM)
+        - Si lieu introuvable, vérifier l'orthographe ou simplifier la query
+        
+        🔄 **SI ÉCHEC:**
+        - Essaye sans le pays: "Atomium, Brussels" au lieu de "Atomium, Brussels, Belgium"
+        - Essaye nom anglais: "Eiffel Tower" au lieu de "Tour Eiffel"
+        - Essaye nom local: "東京スカイツリー" ou "Tokyo Skytree" marchent
+        """
+        try:
+            if ctx:
+                await ctx.info(f"🎯 Geocoding lieu spécifique: '{query}'" + (f" (country={country})" if country else ""))
+            results = await g.geocode_specific_place(query, country, max_results)
+            if ctx:
+                await ctx.info(f"✅ Trouvé {len(results)} lieu(x) spécifique(s)")
+            return results
+        except Exception as e:
+            error_msg = f"❌ Geocoding lieu spécifique échoué pour '{query}': {str(e)}"
+            if ctx:
+                await ctx.error(error_msg)
+            raise Exception(error_msg) from e
+
 
     @mcp.tool(name="places.overview")
     async def places_overview(
