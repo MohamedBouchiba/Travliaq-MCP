@@ -26,18 +26,17 @@ def create_mcp() -> FastMCP:
         
         ✅ **EXEMPLES D'UTILISATION:**
         
-        1. Simple ville (ENGLISH RECOMMANDÉ):
-           geo.city(query="Brussels")
-           → {"name": "Brussels", "country": "Belgium", "latitude": 50.8503, "longitude": 4.3517}
+        1. Simple ville:
+           geo.city(query="[City Name]")
+           → {"name": "[City Name]", "country": "[Country]", "latitude": XX.XXXX, "longitude": XX.XXXX}
         
-        2. Ville + pays (format flexible):
-           geo.city(query="Barcelona, Spain")
-           geo.city(query="Bruxelles, Belgique")  # Auto-retry avec "Bruxelles" si format échoue
+        2. Ville + pays (format flexible - RECOMMANDÉ):
+           geo.city(query="[City Name], [Country]")
            → Le tool essaie automatiquement le nom seul si "Ville, Pays" échoue
         
         3. Avec filtre pays (ISO-2):
-           geo.city(query="Springfield", country="US", max_results=3)
-           → Limite résultats aux USA uniquement
+           geo.city(query="[City Name]", country="[ISO-2 Code]", max_results=3)
+           → Limite résultats au pays spécifié
         
         🔄 **ROBUSTESSE AUTOMATIQUE:**
         - Si "Ville, Pays" échoue, le tool réessaie automatiquement avec "Ville" seule
@@ -82,52 +81,51 @@ def create_mcp() -> FastMCP:
         """🎯 Géocode un LIEU SPÉCIFIQUE (monument, attraction, POI, restaurant) via OpenStreetMap.
         
         📋 **QUAND UTILISER:**
-        - Pour obtenir GPS EXACT d'un monument: "Atomium, Brussels"
-        - Pour une attraction touristique: "Tokyo Skytree, Tokyo"
-        - Pour un musée: "Louvre Museum, Paris"
-        - Pour un temple/sanctuaire: "Senso-ji Temple, Asakusa, Tokyo"
-        - Pour un restaurant célèbre: "Sukiyabashi Jiro, Ginza, Tokyo"
+        - Pour obtenir GPS EXACT d'un monument: "[Monument Name], [City]"
+        - Pour une attraction touristique: "[Attraction Name], [City]"
+        - Pour un musée: "[Museum Name], [City]"
+        - Pour un temple/sanctuaire: "[Temple Name], [Neighborhood], [City]"
+        - Pour un restaurant célèbre: "[Restaurant Name], [Neighborhood], [City]"
         - Pour tout POI (point d'intérêt) spécifique
         
         ✅ **EXEMPLES ULTRA-PRÉCIS:**
         
         1. Monument avec ville et pays:
-           geo.place(query="Atomium, Laken, Brussels, Belgium")
-           → GPS EXACT: {lat: 50.8948, lon: 4.3418}
-           → "display_name": "Atomium, Laken, Bruxelles-Capitale, Belgique"
+           geo.place(query="[Monument Name], [Neighborhood], [City], [Country]")
+           → GPS EXACT du monument
         
         2. Attraction touristique avec quartier:
-           geo.place(query="Tokyo Skytree, Sumida, Tokyo, Japan")
-           → GPS EXACT: {lat: 35.7101, lon: 139.8107}
+           geo.place(query="[Attraction Name], [Neighborhood], [City], [Country]")
+           → GPS EXACT de l'attraction
         
         3. Temple avec quartier:
-           geo.place(query="Senso-ji Temple, Asakusa, Tokyo")
+           geo.place(query="[Temple Name], [Neighborhood], [City]")
            → GPS EXACT du temple
         
         4. Tour/Monument célèbre:
-           geo.place(query="Eiffel Tower, Paris, France")
+           geo.place(query="[Tower Name], [City], [Country]")
            → GPS EXACT de la tour
         
-        5. Restaurant étoilé:
-           geo.place(query="Sukiyabashi Jiro, Ginza, Tokyo")
+        5. Restaurant:
+           geo.place(query="[Restaurant Name], [Neighborhood], [City]")
            → GPS EXACT du restaurant
         
         💡 **ASTUCES POUR MAXIMUM DE PRÉCISION:**
-        - ✅ Inclure le quartier: "Senso-ji, Asakusa, Tokyo" (meilleur que juste "Senso-ji, Tokyo")
-        - ✅ Inclure le pays: "Atomium, Brussels, Belgium" (évite confusion)
-        - ✅ Nom complet: "Tokyo Skytree" au lieu de "Skytree"
-        - ✅ Nom local + anglais: "Tour Eiffel" ou "Eiffel Tower" marchent tous les deux
+        - ✅ Inclure le quartier: "[Place], [Neighborhood], [City]" (meilleur que juste "[Place], [City]")
+        - ✅ Inclure le pays: "[Place], [City], [Country]" (évite confusion)
+        - ✅ Nom complet: Nom complet au lieu d'abréviation
+        - ✅ Nom local + anglais: Les deux fonctionnent généralement
         
         📤 **FORMAT DE RETOUR:**
         [
           {
-            "name": "Atomium",
-            "display_name": "Atomium, Laken, Bruxelles-Capitale, 1020, Belgique",
-            "latitude": 50.8948,
-            "longitude": 4.3418,
-            "type": "attraction",
-            "category": "tourism",
-            "importance": 0.801,
+            "name": "[Place Name]",
+            "display_name": "[Place Name], [Neighborhood], [City], [Postal Code], [Country]",
+            "latitude": XX.XXXX,
+            "longitude": XX.XXXX,
+            "type": "attraction|museum|monument|etc",
+            "category": "tourism|amenity|etc",
+            "importance": 0.XXX,
             "osm_id": 123456789,
             "address": {...}
           }
@@ -138,9 +136,9 @@ def create_mcp() -> FastMCP:
         - Si lieu introuvable, vérifier l'orthographe ou simplifier la query
         
         🔄 **SI ÉCHEC:**
-        - Essaye sans le pays: "Atomium, Brussels" au lieu de "Atomium, Brussels, Belgium"
-        - Essaye nom anglais: "Eiffel Tower" au lieu de "Tour Eiffel"
-        - Essaye nom local: "東京スカイツリー" ou "Tokyo Skytree" marchent
+        - Essaye sans le pays: "[Place], [City]" au lieu de "[Place], [City], [Country]"
+        - Essaye nom anglais si nom local échoue
+        - Essaye nom local si nom anglais échoue
         """
         try:
             if ctx:
@@ -375,7 +373,7 @@ def create_mcp() -> FastMCP:
         Args:
             trip_code: Le code unique du voyage.
             prompt: Description du LIEU SPÉCIFIQUE de l'étape et de l'ambiance.
-                    EXEMPLE: "Temple Senso-ji à Tokyo, atmosphère spirituelle, texture de bois rouge et lanternes, flou artistique."
+                    EXEMPLE: "[Monument/Attraction] in [City], [atmosphere description], [visual details], artistic blur."
                     IMPORTANT: L'image doit être sombre ou peu contrastée pour servir de fond.
             
         Returns:
@@ -487,7 +485,7 @@ def create_mcp() -> FastMCP:
         """Recherche Booking.com avec filtres.
 
         Args:
-            city: Ville de recherche (ex: "Barcelona", "Paris")
+            city: Ville de recherche (ex: "[City Name]")
             checkin: Date d'arrivée (AAAA-MM-JJ)
             checkout: Date de départ (AAAA-MM-JJ)
             adults: Nombre d'adultes (défaut: 2)
@@ -505,9 +503,9 @@ def create_mcp() -> FastMCP:
             Liste d'hôtels avec total_found et champs prix/notes
         
         Examples:
-            booking.search(city="Barcelona", checkin="2026-01-13", checkout="2026-01-16", 
+            booking.search(city="[City Name]", checkin="2026-01-13", checkout="2026-01-16", 
                           star_rating=4, min_review_score=7.5)
-            booking.search(city="Paris", checkin="2026-02-01", checkout="2026-02-05",
+            booking.search(city="[Another City]", checkin="2026-02-01", checkout="2026-02-05",
                           star_rating=[4, 5], max_price=200)
         """
         try:

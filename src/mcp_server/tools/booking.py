@@ -33,7 +33,7 @@ async def search_hotels(
     Search for hotels on Booking.com via the REST API.
     
     Args:
-        city: Destination city (e.g., "Paris")
+        city: Destination city (e.g., "[City Name]")
         checkin: Check-in date (YYYY-MM-DD)
         checkout: Check-out date (YYYY-MM-DD)
         adults: Number of adults (default: 2)

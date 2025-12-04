@@ -84,7 +84,7 @@ async def geocode_text(query: str, count: int = 5, country: Optional[str] = None
     """Géocode un nom de lieu en coordonnées GPS.
     
     Args:
-        query: Nom du lieu (ex: "Paris", "Tokyo Tower", "Lisbon, Portugal")
+        query: Nom du lieu (ex: "[City Name]", "[Monument]", "[City], [Country]")
         count: Nombre maximum de résultats (1-10)
         country: Code pays ISO-2 optionnel pour filtrer (ex: "FR", "PT", "JP")
     
@@ -97,7 +97,7 @@ async def geocode_text(query: str, count: int = 5, country: Optional[str] = None
     if not query or not query.strip():
         raise GeoError(
             "❌ Query vide. "
-            "Exemples valides: 'Paris', 'Tokyo Tower', 'Lisbon Portugal'"
+            "Exemples valides: '[City Name]', '[Monument]', '[City] [Country]'"
         )
     
     query = query.strip()
@@ -130,8 +130,8 @@ async def geocode_text(query: str, count: int = 5, country: Optional[str] = None
 
         suggestion = (
             f"Lieu '{query}' introuvable. "
-            f"Suggestions: Essayez un nom plus simple (ex: 'Lisbon' au lieu de 'Lisbonne'), "
-            f"ou ajoutez le pays (ex: 'Lisbon, Portugal')"
+            f"Suggestions: Essayez un nom plus simple ou un nom anglais, "
+            f"ou ajoutez le pays (ex: '[City], [Country]')"
         )
         if country:
             suggestion += f". Code pays utilisé: {country.upper()}"
@@ -198,8 +198,8 @@ async def geocode_specific_place(
     via Nominatim OpenStreetMap.
     
     Args:
-        query: Nom complet du lieu (ex: "Tokyo Skytree, Tokyo, Japan", 
-               "Atomium, Brussels, Belgium")
+        query: Nom complet du lieu (ex: "[Monument], [City], [Country]", 
+               "[Attraction], [Neighborhood], [City]")
         country: Code pays ISO-2 optionnel pour filtrer (ex: "JP", "BE")
         max_results: Nombre de résultats (1-10)
     
@@ -234,7 +234,7 @@ async def geocode_specific_place(
     if not query or not query.strip():
         raise GeoError(
             "❌ Query vide. "
-            "Exemples: 'Atomium, Brussels', 'Tokyo Skytree, Tokyo, Japan'"
+            "Exemples: '[Monument], [City]', '[Attraction], [City], [Country]'"
         )
     
     query = query.strip()
@@ -264,7 +264,7 @@ async def geocode_specific_place(
             f"Lieu spécifique '{query}' introuvable dans OpenStreetMap. "
             f"Suggestions: "
             f"Vérifiez l'orthographe, ajoutez la ville et le pays "
-            f"(ex: 'Atomium, Brussels, Belgium' au lieu de juste 'Atomium')"
+            f"(ex: '[Monument], [City], [Country]' au lieu de juste '[Monument]')"
         )
         if country:
             suggestion += f". Code pays utilisé: {country.upper()}"
