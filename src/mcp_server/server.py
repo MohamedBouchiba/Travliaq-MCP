@@ -26,17 +26,23 @@ def create_mcp() -> FastMCP:
         
         ✅ **EXEMPLES D'UTILISATION:**
         
-        1. Simple ville:
-           geo.city(query="Tokyo")
-           → {"name": "Tokyo", "country": "Japan", "latitude": 35.6762, "longitude": 139.6503}
+        1. Simple ville (ENGLISH RECOMMANDÉ):
+           geo.city(query="Brussels")
+           → {"name": "Brussels", "country": "Belgium", "latitude": 50.8503, "longitude": 4.3517}
         
-        2. Ville + pays (RECOMMANDÉ pour éviter ambiguïté):
-           geo.city(query="Lisbon, Portugal")
-           → {"name": "Lisbon", "country": "Portugal", "latitude": 38.7223, "longitude": -9.1393}
+        2. Ville + pays (format flexible):
+           geo.city(query="Barcelona, Spain")
+           geo.city(query="Bruxelles, Belgique")  # Auto-retry avec "Bruxelles" si format échoue
+           → Le tool essaie automatiquement le nom seul si "Ville, Pays" échoue
         
         3. Avec filtre pays (ISO-2):
            geo.city(query="Springfield", country="US", max_results=3)
            → Limite résultats aux USA uniquement
+        
+        🔄 **ROBUSTESSE AUTOMATIQUE:**
+        - Si "Ville, Pays" échoue, le tool réessaie automatiquement avec "Ville" seule
+        - Exemple: "Bruxelles, Belgique" → retry avec "Bruxelles" → réussite probable si nom anglais
+        - **CONSEIL:** Préférez les noms anglais ("Brussels" plutôt que "Bruxelles") pour éviter les retries
         
         ⚠️ **NE PAS UTILISER POUR:**
         - ❌ Monuments (ex: "Atomium") → Utiliser geo.place
@@ -46,13 +52,13 @@ def create_mcp() -> FastMCP:
         📤 **FORMAT DE RETOUR:**
         [
           {
-            "name": "Lisbon",
-            "country": "Portugal",
-            "admin1": "Lisboa",
-            "latitude": 38.7223,
-            "longitude": -9.1393,
-            "timezone": "Europe/Lisbon",
-            "population": 517802
+            "name": "Brussels",
+            "country": "Belgium",
+            "admin1": "Brussels-Capital",
+            "latitude": 50.8503,
+            "longitude": 4.3517,
+            "timezone": "Europe/Brussels",
+            "population": 1019022
           }
         ]
         
@@ -475,15 +481,40 @@ def create_mcp() -> FastMCP:
         min_price: Optional[int] = None,
         max_price: Optional[int] = None,
         min_review_score: Optional[float] = None,
-        star_rating: Optional[List[int]] = None,
+        star_rating: Optional[List[int] | int] = None,
         ctx: Context = None
     ) -> Dict[str, Any]:
         """Recherche Booking.com avec filtres.
 
-        - Requis : `city`, `checkin`, `checkout` (AAAA-MM-JJ). Optionnels : `adults`, `children`, `rooms`, `max_results`, filtres de prix/note (`min_price`, `max_price`, `min_review_score`, `star_rating`).
-        - Retour : liste d'hôtels, `total_found`, et champs prix/notes prêts à trier côté agent.
+        Args:
+            city: Ville de recherche (ex: "Barcelona", "Paris")
+            checkin: Date d'arrivée (AAAA-MM-JJ)
+            checkout: Date de départ (AAAA-MM-JJ)
+            adults: Nombre d'adultes (défaut: 2)
+            children: Nombre d'enfants (défaut: 0)
+            rooms: Nombre de chambres (défaut: 1)
+            max_results: Nombre max de résultats (défaut: 10)
+            min_price: Prix minimum par nuit (€)
+            max_price: Prix maximum par nuit (€)
+            min_review_score: Note minimale (0-10, ex: 7.5)
+            star_rating: Étoiles de l'hôtel - FLEXIBLE: int ou list[int]
+                         Exemples: star_rating=4 OU star_rating=[4, 5]
+                         → Conversion automatique int → list
+        
+        Returns:
+            Liste d'hôtels avec total_found et champs prix/notes
+        
+        Examples:
+            booking.search(city="Barcelona", checkin="2026-01-13", checkout="2026-01-16", 
+                          star_rating=4, min_review_score=7.5)
+            booking.search(city="Paris", checkin="2026-02-01", checkout="2026-02-05",
+                          star_rating=[4, 5], max_price=200)
         """
         try:
+            # 🔧 FIX: Convertir int en list[int] pour éviter erreur de validation Pydantic
+            if isinstance(star_rating, int):
+                star_rating = [star_rating]
+
             if ctx:
                 await ctx.info(f"Searching hotels in {city} from {checkin} to {checkout}")
             

@@ -114,6 +114,20 @@ async def geocode_text(query: str, count: int = 5, country: Optional[str] = None
     
     # ✅ MEILLEUR MESSAGE: Si aucun résultat trouvé
     if not results:
+        # 🔄 RETRY: Si la query contient une virgule (ex: "Bruxelles, Belgique"), 
+        # essayer de chercher juste le premier terme ("Bruxelles")
+        if "," in query:
+            simple_query = query.split(",")[0].strip()
+            # Éviter une récursion infinie ou inutile
+            if simple_query and simple_query != query:
+                try:
+                    # On réessaie sans le pays explicite dans la query, 
+                    # mais on garde le paramètre country s'il était valide (ISO-2)
+                    return await geocode_text(simple_query, count, country)
+                except GeoError:
+                    # Si ça échoue aussi, on continue vers l'erreur standard
+                    pass
+
         suggestion = (
             f"Lieu '{query}' introuvable. "
             f"Suggestions: Essayez un nom plus simple (ex: 'Lisbon' au lieu de 'Lisbonne'), "
