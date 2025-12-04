@@ -406,7 +406,9 @@ def create_mcp() -> FastMCP:
                     IMPORTANT: L'image doit être sombre ou peu contrastée pour servir de fond.
             
         Returns:
-            Dict contenant l'URL de l'image générée.
+            Dict avec structure stable:
+            - Succès: {"success": true, "trip_code": "...", "url": "https://...", "type": "background", "usage": "..."}
+            - Erreur: {"success": false, "trip_code": "...", "url": null, "error": "...", "type": "background", "usage": "..."}
         """
         try:
             if ctx:
@@ -417,15 +419,28 @@ def create_mcp() -> FastMCP:
             if ctx:
                 await ctx.info(f"Background image generated: {url}")
 
+            # ✅ TOUJOURS retourner un dict stable
             return {
+                "success": True,
+                "trip_code": trip_code,
                 "url": url,
                 "type": "background",
                 "usage": "step_main_image"
             }
         except Exception as e:
+            error_msg = f"Failed to generate background image: {str(e)}"
             if ctx:
-                await ctx.error(f"Background image generation failed: {str(e)}")
-            raise RuntimeError(f"Failed to generate background image: {str(e)}")
+                await ctx.error(error_msg)
+            
+            # ✅ Retourner un dict stable même en cas d'erreur
+            return {
+                "success": False,
+                "trip_code": trip_code,
+                "url": None,
+                "type": "background",
+                "usage": "step_main_image",
+                "error": error_msg
+            }
 
     @mcp.tool(name="images.slider")
     async def images_slider(
