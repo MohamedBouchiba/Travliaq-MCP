@@ -6,6 +6,7 @@ from .tools import image_generation as imgs
 from .tools import booking as b
 from .tools import flights as f
 from .tools import places as g
+from .tools import translation as t
 
 
 def create_mcp() -> FastMCP:
@@ -456,6 +457,128 @@ def create_mcp() -> FastMCP:
                 "usage": "step_main_image",
                 "error": error_msg
             }
+
+    @mcp.tool(name="text.translate")
+    async def text_translate(
+        text: str,
+        source_language: str = "EN",
+        target_language: str = "FR",
+        ctx: Context = None
+    ) -> Dict[str, Any]:
+        """🌍 Traduit un texte d'une langue source vers une langue cible.
+        
+        Utilise le service Travliaq-Translate basé sur NLLB-200 (200 langues supportées).
+        Haute qualité pour paires de langues rares, meilleur que Google Translate pour certaines langues.
+        
+        📋 **CODES LANGUES SUPPORTÉS:**
+        - EN (Anglais), FR (Français), ES (Espagnol), DE (Allemand)
+        - IT (Italien), PT (Portugais), NL (Néerlandais), RU (Russe)
+        - AR (Arabe), ZH (Chinois simplifié)
+        - + 190 autres langues via codes NLLB (ex: "eng_Latn", "fra_Latn")
+        
+        ✅ **EXEMPLES D'UTILISATION:**
+        
+        1. Traduction simple:
+           text.translate(text="Hello world", source_language="EN", target_language="FR")
+           → {"success": true, "translated_text": "Bonjour le monde", "target_language": "fra_Latn"}
+        
+        2. Traduction titre voyage:
+           text.translate(text="Discover Tokyo's Hidden Temples", source_language="EN", target_language="ES")
+           → {"success": true, "translated_text": "Descubre los templos escondidos de Tokio", ...}
+        
+        3. Traduction description longue:
+           text.translate(
+               text="Visit the ancient Senso-ji temple, Tokyo's oldest Buddhist temple...",
+               source_language="EN",
+               target_language="ZH"
+           )
+        
+        ⚠️ **LIMITES:**
+        - Texte max ~512 tokens (environ 400 mots)
+        - Pour textes très longs, découper en chunks
+        
+        📊 **FORMAT RETOUR:**
+        Succès: {"success": true, "translated_text": "...", "target_language": "fra_Latn"}
+        Erreur: {"success": false, "error": "Translation service unavailable"}>
+        
+        Args:
+            text: Texte à traduire
+            source_language: Code langue source (EN, FR, ES, DE, IT, PT, NL, RU, AR, ZH)
+            target_language: Code langue cible
+            
+        Returns:
+            Dict avec structure stable (success, translated_text, target_language ou error)
+        """
+        try:
+            if ctx:
+                await ctx.info(f"Translating: {source_language} → {target_language}")
+            
+            result = await t.translate_text(text, source_language, target_language)
+            
+            if ctx and result.get("success"):
+                await ctx.info(f"Translation successful")
+            elif ctx:
+                await ctx.error(f"Translation failed: {result.get('error')}")
+            
+            return result
+        except Exception as e:
+            error_msg = f"Failed to translate: {str(e)}"
+            if ctx:
+                await ctx.error(error_msg)
+            
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    @mcp.tool(name="translate_en")
+    async def translate_en(
+        text: str,
+        ctx: Context = None
+    ) -> str:
+        """🇬🇧 Version ULTRA-SIMPLE : Traduit du Français → Anglais (FR → EN).
+        
+        Parfait pour les agents : juste donner le texte en français, recevoir en anglais.
+        Aucune autre option, ultra-simple !
+        
+        ✅ **UTILISATION:**
+        ```
+        translate_en(text="N'oubliez pas d'acheter des souvenirs")
+        → "Don't forget to buy souvenirs"
+        
+        translate_en(text="Découvrez les temples cachés de Tokyo")
+        → "Discover the hidden temples of Tokyo"
+        ```
+        
+        📝 **FORMAT RETOUR:** 
+        String directe (pas de dict, pas de success/error)
+        
+        ⚠️ **EN CAS D'ERREUR:**
+        Retourne le texte original en français (fallback gracieux)
+        
+        Args:
+            text: Texte en FRANÇAIS à traduire
+            
+        Returns:
+            Texte traduit en ANGLAIS (string simple)
+        """
+        try:
+            if ctx:
+                await ctx.info(f"Translating FR → EN: {text[:50]}...")
+            
+            translated = await t.translate_en(text)
+            
+            if ctx:
+                await ctx.info(f"Translation successful")
+            
+            return translated
+        except Exception as e:
+            error_msg = f"Failed to translate: {str(e)}"
+            if ctx:
+                await ctx.error(error_msg)
+            
+            # Fallback: retourner texte original
+            return text
 
     @mcp.tool(name="images.slider")
     async def images_slider(
