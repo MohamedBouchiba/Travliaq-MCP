@@ -368,7 +368,9 @@ def create_mcp() -> FastMCP:
                     EXEMPLE: "Vue panoramique époustouflante du Mont Fuji au lever du soleil, Japon, cerisiers en fleurs au premier plan, lumière dorée."
         
         Returns:
-            Dict contenant l'URL de l'image générée.
+            Dict avec structure stable:
+            - Succès: {"success": true, "trip_code": "...", "url": "https://...", "type": "hero", "usage": "..."}
+            - Erreur: {"success": false, "trip_code": "...", "url": null, "error": "...", "type": "hero", "usage": "..."}
         """
         try:
             if ctx:
@@ -379,15 +381,28 @@ def create_mcp() -> FastMCP:
             if ctx:
                 await ctx.info(f"Hero image generated: {url}")
 
+            # ✅ TOUJOURS retourner un dict stable
             return {
+                "success": True,
+                "trip_code": trip_code,
                 "url": url,
                 "type": "hero",
                 "usage": "main_image"
             }
         except Exception as e:
+            error_msg = f"Failed to generate hero image: {str(e)}"
             if ctx:
-                await ctx.error(f"Hero image generation failed: {str(e)}")
-            raise RuntimeError(f"Failed to generate hero image: {str(e)}")
+                await ctx.error(error_msg)
+            
+            # ✅ Retourner un dict stable même en cas d'erreur
+            return {
+                "success": False,
+                "trip_code": trip_code,
+                "url": None,
+                "type": "hero",
+                "usage": "main_image",
+                "error": error_msg
+            }
 
     @mcp.tool(name="images.background")
     async def images_background(
