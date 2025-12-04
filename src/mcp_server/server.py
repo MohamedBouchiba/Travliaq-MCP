@@ -117,19 +117,33 @@ def create_mcp() -> FastMCP:
         - ✅ Nom local + anglais: Les deux fonctionnent généralement
         
         📤 **FORMAT DE RETOUR:**
-        [
-          {
-            "name": "[Place Name]",
-            "display_name": "[Place Name], [Neighborhood], [City], [Postal Code], [Country]",
-            "latitude": XX.XXXX,
-            "longitude": XX.XXXX,
-            "type": "attraction|museum|monument|etc",
-            "category": "tourism|amenity|etc",
-            "importance": 0.XXX,
-            "osm_id": 123456789,
-            "address": {...}
-          }
-        ]
+        {
+          "success": true,
+          "query": "[query utilisée]",
+          "count": 2,
+          "results": [
+            {
+              "name": "[Place Name]",
+              "display_name": "[Place Name], [Neighborhood], [City], [Postal Code], [Country]",
+              "latitude": XX.XXXX,
+              "longitude": XX.XXXX,
+              "type": "attraction|museum|monument|etc",
+              "category": "tourism|amenity|etc",
+              "importance": 0.XXX,
+              "osm_id": 123456789,
+              "address": {...}
+            }
+          ]
+        }
+        
+        En cas d'erreur:
+        {
+          "success": false,
+          "query": "[query utilisée]",
+          "count": 0,
+          "results": [],
+          "error": "[message d'erreur]"
+        }
         
         ⚠️ **LIMITATIONS:**
         - Délai de 1 seconde entre chaque requête (politique Nominatim OSM)
@@ -146,12 +160,27 @@ def create_mcp() -> FastMCP:
             results = await g.geocode_specific_place(query, country, max_results)
             if ctx:
                 await ctx.info(f"✅ Trouvé {len(results)} lieu(x) spécifique(s)")
-            return results
+            
+            # ✅ TOUJOURS retourner un dict stable
+            return {
+                "success": True,
+                "query": query,
+                "results": results,
+                "count": len(results)
+            }
         except Exception as e:
             error_msg = f"❌ Geocoding lieu spécifique échoué pour '{query}': {str(e)}"
             if ctx:
                 await ctx.error(error_msg)
-            raise Exception(error_msg) from e
+            
+            # ✅ Retourner un dict stable même en cas d'erreur
+            return {
+                "success": False,
+                "query": query,
+                "results": [],
+                "count": 0,
+                "error": error_msg
+            }
 
 
     @mcp.tool(name="places.overview")
