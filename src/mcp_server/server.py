@@ -322,8 +322,6 @@ def create_mcp() -> FastMCP:
     async def images_hero(
         trip_code: str,
         prompt: str,
-        city: str,
-        country: str,
         ctx: Context = None
     ) -> Dict[str, Any]:
         """Génère l'image principale (Hero) du voyage. Format 1920x1080.
@@ -331,21 +329,19 @@ def create_mcp() -> FastMCP:
         Cette image est la bannière principale. Elle doit être spectaculaire, inspirante et de très haute qualité.
         
         Args:
-            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025"). DOIT être identique pour toutes les images d'un même voyage.
+            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025"). Sert à organiser les fichiers dans le stockage.
             prompt: Description VISUELLE détaillée de la scène.
-                    EXEMPLE: "Vue panoramique époustouflante du Mont Fuji au lever du soleil, cerisiers en fleurs au premier plan, lumière dorée, haute résolution, photoréaliste."
-                    NE PAS inclure de demande de texte dans l'image.
-            city: La ville du voyage.
-            country: Le pays du voyage.
+                    DOIT inclure le LIEU (Ville, Pays) et l'AMBIANCE générale du voyage.
+                    EXEMPLE: "Vue panoramique époustouflante du Mont Fuji au lever du soleil, Japon, cerisiers en fleurs au premier plan, lumière dorée."
         
         Returns:
-            Dict contenant l'URL de l'image générée (hébergée sur Supabase) et ses métadonnées.
+            Dict contenant l'URL de l'image générée.
         """
         try:
             if ctx:
-                await ctx.info(f"Generating hero image for {city}, {country} (Trip: {trip_code})")
+                await ctx.info(f"Generating hero image (Trip: {trip_code})")
 
-            url = imgs.generate_hero(trip_code, prompt, city, country)
+            url = imgs.generate_hero(trip_code, prompt)
 
             if ctx:
                 await ctx.info(f"Hero image generated: {url}")
@@ -353,9 +349,7 @@ def create_mcp() -> FastMCP:
             return {
                 "url": url,
                 "type": "hero",
-                "usage": "main_image",
-                "city": city,
-                "country": country
+                "usage": "main_image"
             }
         except Exception as e:
             if ctx:
@@ -366,31 +360,26 @@ def create_mcp() -> FastMCP:
     async def images_background(
         trip_code: str,
         prompt: str,
-        city: str,
-        country: str,
         ctx: Context = None
     ) -> Dict[str, Any]:
         """Génère une image d'arrière-plan (1920x1080).
 
-        Cette image servira de fond pour une étape ou une section. Elle sera affichée avec de l'opacité.
-        Elle doit être texturée, atmosphérique, et PAS trop chargée visuellement pour ne pas gêner la lecture du texte par dessus.
+        Cette image servira de fond pour une étape. Elle sera affichée avec de l'opacité.
         
         Args:
-            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025").
-            prompt: Description de l'ambiance, de la texture ou du paysage flou.
-                    EXEMPLE: "Texture abstraite de vagues océaniques, tons bleu profond et turquoise, style minimaliste, flou artistique, pas de détails nets."
+            trip_code: Le code unique du voyage.
+            prompt: Description du LIEU SPÉCIFIQUE de l'étape et de l'ambiance.
+                    EXEMPLE: "Temple Senso-ji à Tokyo, atmosphère spirituelle, texture de bois rouge et lanternes, flou artistique."
                     IMPORTANT: L'image doit être sombre ou peu contrastée pour servir de fond.
-            city: La ville.
-            country: Le pays.
             
         Returns:
             Dict contenant l'URL de l'image générée.
         """
         try:
             if ctx:
-                await ctx.info(f"Generating background image for {city}, {country} (Trip: {trip_code})")
+                await ctx.info(f"Generating background image (Trip: {trip_code})")
 
-            url = imgs.generate_background(trip_code, prompt, city, country)
+            url = imgs.generate_background(trip_code, prompt)
 
             if ctx:
                 await ctx.info(f"Background image generated: {url}")
@@ -398,9 +387,7 @@ def create_mcp() -> FastMCP:
             return {
                 "url": url,
                 "type": "background",
-                "usage": "step_main_image",
-                "city": city,
-                "country": country
+                "usage": "step_main_image"
             }
         except Exception as e:
             if ctx:
@@ -411,29 +398,26 @@ def create_mcp() -> FastMCP:
     async def images_slider(
         trip_code: str,
         prompt: str,
-        city: str,
-        country: str,
         ctx: Context = None
     ) -> Dict[str, Any]:
         """Génère une image illustrative pour un carrousel (800x600).
 
-        Utilisé pour illustrer des activités spécifiques, des plats culinaires, ou des détails culturels. Style "reportage voyage" ou "photo documentaire".
+        Utilisé pour illustrer des activités spécifiques ou des détails.
         
         Args:
-            trip_code: Le code unique du voyage (ex: "JP_TOKYO_2025").
+            trip_code: Le code unique du voyage.
             prompt: Description de l'activité ou du lieu spécifique.
-                    EXEMPLE: "Gros plan macro sur un bol de ramen fumant, baguettes tenant des nouilles, éclairage chaleureux de restaurant, profondeur de champ."
-            city: La ville.
-            country: Le pays.
+                    DOIT inclure le LIEU.
+                    EXEMPLE: "Gros plan sur un bol de ramen fumant à Tokyo, éclairage chaleureux."
             
         Returns:
             Dict contenant l'URL de l'image générée.
         """
         try:
             if ctx:
-                await ctx.info(f"Generating slider image for {city}, {country} (Trip: {trip_code})")
+                await ctx.info(f"Generating slider image (Trip: {trip_code})")
             
-            url = imgs.generate_slider(trip_code, prompt, city, country)
+            url = imgs.generate_slider(trip_code, prompt)
             
             if ctx:
                 await ctx.info(f"Slider image generated: {url}")
@@ -441,9 +425,7 @@ def create_mcp() -> FastMCP:
             return {
                 "url": url,
                 "type": "slider",
-                "usage": "carousel",
-                "city": city,
-                "country": country
+                "usage": "carousel"
             }
         except Exception as e:
             if ctx:

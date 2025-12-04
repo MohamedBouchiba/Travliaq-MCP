@@ -171,7 +171,7 @@ def _process_and_upload(
 
 # --- Public Tools ---
 
-def generate_hero(trip_code: str, prompt: str, city: str, country: str) -> str:
+def generate_hero(trip_code: str, prompt: str) -> str:
     """
     Generates a high-quality Hero image (1920x1080).
     """
@@ -179,7 +179,7 @@ def generate_hero(trip_code: str, prompt: str, city: str, country: str) -> str:
     
     # Enhanced prompt for Hero quality
     enhanced_prompt = (
-        f"Hero image of {city}, {country}. {prompt}. "
+        f"{prompt}. "
         "Cinematic lighting, wide angle, high resolution, photorealistic, "
         "travel photography, vibrant colors, 8k, highly detailed."
     )
@@ -187,7 +187,7 @@ def generate_hero(trip_code: str, prompt: str, city: str, country: str) -> str:
     raw_bytes = _generate_image_openrouter(enhanced_prompt, width, height)
     return _process_and_upload(raw_bytes, trip_code, "hero", width, height)
 
-def generate_background(trip_code: str, prompt: str, city: str, country: str) -> str:
+def generate_background(trip_code: str, prompt: str) -> str:
     """
     Generates a Background image (1920x1080), optimized for opacity/overlay.
     """
@@ -195,7 +195,7 @@ def generate_background(trip_code: str, prompt: str, city: str, country: str) ->
     
     # Enhanced prompt for Background (softer, less busy)
     enhanced_prompt = (
-        f"Background texture image of {city}, {country}. {prompt}. "
+        f"{prompt}. "
         "Soft focus, blurred background, atmospheric, minimal details, "
         "suitable for text overlay, muted tones, travel theme."
     )
@@ -203,7 +203,7 @@ def generate_background(trip_code: str, prompt: str, city: str, country: str) ->
     raw_bytes = _generate_image_openrouter(enhanced_prompt, width, height)
     return _process_and_upload(raw_bytes, trip_code, "background", width, height)
 
-def generate_slider(trip_code: str, prompt: str, city: str, country: str) -> str:
+def generate_slider(trip_code: str, prompt: str) -> str:
     """
     Generates a Slider image (800x600).
     """
@@ -211,7 +211,7 @@ def generate_slider(trip_code: str, prompt: str, city: str, country: str) -> str
     
     # Enhanced prompt for Slider (descriptive)
     enhanced_prompt = (
-        f"Travel photo of {city}, {country}. {prompt}. "
+        f"{prompt}. "
         "Photorealistic, clear focus, beautiful composition, "
         "daylight, travel guide style."
     )
