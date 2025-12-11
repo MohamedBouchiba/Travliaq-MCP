@@ -80,24 +80,24 @@ async def _http_get(
     raise last_err if last_err else GeoError("Unknown error")
 
 
-async def geocode_text(query: str, count: int = 5, country: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Géocode un nom de lieu en coordonnées GPS.
+    async def geocode_text(query: str, count: int = 5, country: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Geobatch a place name to GPS coordinates.
     
     Args:
-        query: Nom du lieu (ex: "[City Name]", "[Monument]", "[City], [Country]")
-        count: Nombre maximum de résultats (1-10)
-        country: Code pays ISO-2 optionnel pour filtrer (ex: "FR", "PT", "JP")
+        query: Name of the place (e.g., "[City Name]", "[Region]", "[City], [Country]")
+        count: Max number of results (1-10)
+        country: Optional ISO-3166-1 alpha-2 country code (e.g. "US", "FR")
     
     Returns:
-        Liste de lieux avec name, country, latitude, longitude, etc.
+        List of places with name, country, latitude, longitude, etc.
         
     Raises:
-        GeoError: Si le lieu n'est pas trouvé ou erreur API
+        GeoError: If place not found or API error.
     """
     if not query or not query.strip():
         raise GeoError(
-            "❌ Query vide. "
-            "Exemples valides: '[City Name]', '[Monument]', '[City] [Country]'"
+            "❌ Empty Query. "
+            "Valid examples: '[City Name]', '[City], [Country]'"
         )
     
     query = query.strip()
@@ -194,47 +194,24 @@ async def geocode_specific_place(
     max_results: int = 3
 ) -> List[Dict[str, Any]]:
     """
-    Géocode un LIEU SPÉCIFIQUE (monument, attraction, restaurant, POI)
+    Geocodes a SPECIFIC PLACE (monument, attraction, restaurant, POI)
     via Nominatim OpenStreetMap.
     
     Args:
-        query: Nom complet du lieu (ex: "[Monument], [City], [Country]", 
-               "[Attraction], [Neighborhood], [City]")
-        country: Code pays ISO-2 optionnel pour filtrer (ex: "JP", "BE")
-        max_results: Nombre de résultats (1-10)
+        query: Full specific place name (e.g. "[Monument], [City], [Country]")
+        country: Optional ISO-3166-1 alpha-2 country code
+        max_results: Max results (1-10)
     
     Returns:
-        Liste de lieux avec name, display_name, latitude, longitude, type, etc.
+        List of detailed results.
         
     Raises:
-        GeoError: Si le lieu n'est pas trouvé ou erreur API
-    
-    Examples:
-        >>> await geocode_specific_place("Atomium, Brussels, Belgium")
-        [{
-          "name": "Atomium",
-          "display_name": "Atomium, Laken, Bruxelles-Capitale, Belgique",
-          "latitude": 50.8948,
-          "longitude": 4.3418,
-          "type": "attraction",
-          "category": "tourism",
-          "importance": 0.8
-        }]
-        
-        >>> await geocode_specific_place("Tokyo Skytree, Tokyo")
-        [{
-          "name": "東京スカイツリー",
-          "display_name": "Tokyo Skytree, Sumida, Tokyo, Japan",
-          "latitude": 35.7101,
-          "longitude": 139.8107,
-          "type": "tower",
-          "category": "tourism"
-        }]
+        GeoError: If not found or API error.
     """
     if not query or not query.strip():
         raise GeoError(
-            "❌ Query vide. "
-            "Exemples: '[Monument], [City]', '[Attraction], [City], [Country]'"
+            "❌ Empty Query. "
+            "Examples: '[Monument], [City]', '[Place], [City], [Country]'"
         )
     
     query = query.strip()

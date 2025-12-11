@@ -17,150 +17,60 @@ def create_mcp() -> FastMCP:
 
     @mcp.tool(name="geo.city")
     async def geo_city(query: str, country: str | None = None, max_results: int = 5, ctx: Context = None):
-        """🏙️ Géocode une VILLE ou un PAYS en coordonnées GPS.
-        
-        📋 **QUAND UTILISER:**
-        - Pour obtenir GPS d'une ville: "Paris", "Tokyo", "Lisbon"
-        - Pour une région/province: "Provence, France", "Hokkaido, Japan"
-        - Pour un pays entier: "Portugal", "Japan", "Belgium"
-        - Avant d'appeler weather, flights, climate, ou airports tools
-        
-        ✅ **EXEMPLES D'UTILISATION:**
-        
-        1. Simple ville:
-           geo.city(query="[City Name]")
-           → {"name": "[City Name]", "country": "[Country]", "latitude": XX.XXXX, "longitude": XX.XXXX}
-        
-        2. Ville + pays (format flexible - RECOMMANDÉ):
-           geo.city(query="[City Name], [Country]")
-           → Le tool essaie automatiquement le nom seul si "Ville, Pays" échoue
-        
-        3. Avec filtre pays (ISO-2):
-           geo.city(query="[City Name]", country="[ISO-2 Code]", max_results=3)
-           → Limite résultats au pays spécifié
-        
-        🔄 **ROBUSTESSE AUTOMATIQUE:**
-        - Si "Ville, Pays" échoue, le tool réessaie automatiquement avec "Ville" seule
-        - Exemple: "Bruxelles, Belgique" → retry avec "Bruxelles" → réussite probable si nom anglais
-        - **CONSEIL:** Préférez les noms anglais ("Brussels" plutôt que "Bruxelles") pour éviter les retries
-        
-        ⚠️ **NE PAS UTILISER POUR:**
-        - ❌ Monuments (ex: "Atomium") → Utiliser geo.place
-        - ❌ Attractions spécifiques (ex: "Tokyo Skytree") → Utiliser geo.place
-        - ❌ Restaurants, musées, POIs → Utiliser geo.place
-        
-        📤 **FORMAT DE RETOUR:**
-        [
-          {
-            "name": "Brussels",
-            "country": "Belgium",
-            "admin1": "Brussels-Capital",
-            "latitude": 50.8503,
-            "longitude": 4.3517,
-            "timezone": "Europe/Brussels",
-            "population": 1019022
-          }
-        ]
-        
-        💡 **ASTUCE:** Utilise TOUJOURS le premier résultat [0] sauf si tu cherches parmi plusieurs villes homonymes.
+        """Finds geographic coordinates for a city, region, or country.
+
+        Use this tool to get the latitude and longitude for general locations like cities, provinces, states, or countries.
+        Do NOT use this tool for specific buildings, landmarks, or addresses (use `geo.place` for those).
+
+        ARGS:
+            query (str): The name of the city or region.
+                - FORMAT: "[City Name]" or "[City Name], [Country Name]"
+                - LANGUAGE: PREFER ENGLISH names for best results (e.g., use the English spelling of the city/country).
+                - AMBIGUITY: If a city name exists in multiple countries, ALWAYS include the country name in the query or use the `country` parameter.
+            country (str, optional): ISO-3166-1 alpha-2 country code (e.g., "US", "FR") to filter results.
+
+        RETURNS:
+            list[dict]: A list of matching locations with coordinates and metadata.
+            Always use the first result unless you have a specific reason to choose another.
         """
         try:
             if ctx:
-                await ctx.info(f"🏙️ Geocoding ville/pays: '{query}'" + (f" (country={country})" if country else ""))
+                await ctx.info(f"🏙️ Geocoding City/Region: '{query}'" + (f" (country={country})" if country else ""))
             results = await g.geocode_text(query, max_results, country)
             if ctx:
-                await ctx.info(f"✅ Trouvé {len(results)} résultat(s)")
+                await ctx.info(f"✅ Found {len(results)} location(s)")
             return results
         except Exception as e:
-            error_msg = f"❌ Geocoding ville/pays échoué pour '{query}': {str(e)}"
+            error_msg = f"❌ Geocoding failed for '{query}': {str(e)}"
             if ctx:
                 await ctx.error(error_msg)
             raise Exception(error_msg) from e
 
     @mcp.tool(name="geo.place")
     async def geo_place(query: str, country: str | None = None, max_results: int = 3, ctx: Context = None):
-        """🎯 Géocode un LIEU SPÉCIFIQUE (monument, attraction, POI, restaurant) via OpenStreetMap.
-        
-        📋 **QUAND UTILISER:**
-        - Pour obtenir GPS EXACT d'un monument: "[Monument Name], [City]"
-        - Pour une attraction touristique: "[Attraction Name], [City]"
-        - Pour un musée: "[Museum Name], [City]"
-        - Pour un temple/sanctuaire: "[Temple Name], [Neighborhood], [City]"
-        - Pour un restaurant célèbre: "[Restaurant Name], [Neighborhood], [City]"
-        - Pour tout POI (point d'intérêt) spécifique
-        
-        ✅ **EXEMPLES ULTRA-PRÉCIS:**
-        
-        1. Monument avec ville et pays:
-           geo.place(query="[Monument Name], [Neighborhood], [City], [Country]")
-           → GPS EXACT du monument
-        
-        2. Attraction touristique avec quartier:
-           geo.place(query="[Attraction Name], [Neighborhood], [City], [Country]")
-           → GPS EXACT de l'attraction
-        
-        3. Temple avec quartier:
-           geo.place(query="[Temple Name], [Neighborhood], [City]")
-           → GPS EXACT du temple
-        
-        4. Tour/Monument célèbre:
-           geo.place(query="[Tower Name], [City], [Country]")
-           → GPS EXACT de la tour
-        
-        5. Restaurant:
-           geo.place(query="[Restaurant Name], [Neighborhood], [City]")
-           → GPS EXACT du restaurant
-        
-        💡 **ASTUCES POUR MAXIMUM DE PRÉCISION:**
-        - ✅ Inclure le quartier: "[Place], [Neighborhood], [City]" (meilleur que juste "[Place], [City]")
-        - ✅ Inclure le pays: "[Place], [City], [Country]" (évite confusion)
-        - ✅ Nom complet: Nom complet au lieu d'abréviation
-        - ✅ Nom local + anglais: Les deux fonctionnent généralement
-        
-        📤 **FORMAT DE RETOUR:**
-        {
-          "success": true,
-          "query": "[query utilisée]",
-          "count": 2,
-          "results": [
-            {
-              "name": "[Place Name]",
-              "display_name": "[Place Name], [Neighborhood], [City], [Postal Code], [Country]",
-              "latitude": XX.XXXX,
-              "longitude": XX.XXXX,
-              "type": "attraction|museum|monument|etc",
-              "category": "tourism|amenity|etc",
-              "importance": 0.XXX,
-              "osm_id": 123456789,
-              "address": {...}
-            }
-          ]
-        }
-        
-        En cas d'erreur:
-        {
-          "success": false,
-          "query": "[query utilisée]",
-          "count": 0,
-          "results": [],
-          "error": "[message d'erreur]"
-        }
-        
-        ⚠️ **LIMITATIONS:**
-        - Délai de 1 seconde entre chaque requête (politique Nominatim OSM)
-        - Si lieu introuvable, vérifier l'orthographe ou simplifier la query
-        
-        🔄 **SI ÉCHEC:**
-        - Essaye sans le pays: "[Place], [City]" au lieu de "[Place], [City], [Country]"
-        - Essaye nom anglais si nom local échoue
-        - Essaye nom local si nom anglais échoue
+        """Finds geographic coordinates for a SPECIFIC place, point of interest (POI), or address.
+
+        Use this tool for specific landmarks like monuments, museums, hotels, restaurants, parks, or attractions.
+        Do NOT use this tool for general cities or countries (use `geo.city` for those).
+
+        ARGS:
+            query (str): The search query for the place.
+                - FORMAT: "[Place Name], [City Name], [Country Name]"
+                - REQUIRED: You MUST include the City and Country to ensure the correct place is found.
+                - LANGUAGE: Provide the query in ENGLISH if possible, or the local language of the place.
+                - SPECIFICITY: Be as specific as possible. Include neighborhood if known.
+            country (str, optional): ISO-3166-1 alpha-2 country code (e.g. "JP", "IT") to restrict search.
+
+        RETURNS:
+             dict: A structured response containing success status, count, and results list.
+             The results contain precise coordinates, address details, and category/type of the place.
         """
         try:
             if ctx:
-                await ctx.info(f"🎯 Geocoding lieu spécifique: '{query}'" + (f" (country={country})" if country else ""))
+                await ctx.info(f"🎯 Geocoding Specific Place: '{query}'" + (f" (country={country})" if country else ""))
             results = await g.geocode_specific_place(query, country, max_results)
             if ctx:
-                await ctx.info(f"✅ Trouvé {len(results)} lieu(x) spécifique(s)")
+                await ctx.info(f"✅ Found {len(results)} specific place(s)")
             
             # ✅ TOUJOURS retourner un dict stable
             return {
@@ -170,7 +80,7 @@ def create_mcp() -> FastMCP:
                 "count": len(results)
             }
         except Exception as e:
-            error_msg = f"❌ Geocoding lieu spécifique échoué pour '{query}': {str(e)}"
+            error_msg = f"❌ Geocoding failed for '{query}': {str(e)}"
             if ctx:
                 await ctx.error(error_msg)
             
