@@ -80,7 +80,7 @@ async def _http_get(
     raise last_err if last_err else GeoError("Unknown error")
 
 
-    async def geocode_text(query: str, count: int = 5, country: Optional[str] = None) -> List[Dict[str, Any]]:
+async def geocode_text(query: str, count: int = 5, country: Optional[str] = None) -> List[Dict[str, Any]]:
     """Geobatch a place name to GPS coordinates.
     
     Args:
