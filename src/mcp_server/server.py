@@ -30,8 +30,7 @@ def create_mcp() -> FastMCP:
             country (str, optional): ISO-3166-1 alpha-2 country code (e.g., "US", "FR") to filter results.
 
         RETURNS:
-            list[dict]: A list of matching locations with coordinates and metadata.
-            Always use the first result unless you have a specific reason to choose another.
+            dict: A structured response with success status and results list (same format as geo.place).
         """
         try:
             if ctx:
@@ -39,12 +38,27 @@ def create_mcp() -> FastMCP:
             results = await g.geocode_text(query, max_results, country)
             if ctx:
                 await ctx.info(f"✅ Found {len(results)} location(s)")
-            return results
+
+            # ✅ CORRECTION: Retourner format consistant (dict) au lieu de liste
+            return {
+                "success": True,
+                "query": query,
+                "results": results,
+                "count": len(results)
+            }
         except Exception as e:
             error_msg = f"❌ Geocoding failed for '{query}': {str(e)}"
             if ctx:
                 await ctx.error(error_msg)
-            raise Exception(error_msg) from e
+
+            # ✅ Retourner dict stable même en cas d'erreur
+            return {
+                "success": False,
+                "query": query,
+                "results": [],
+                "count": 0,
+                "error": error_msg
+            }
 
     @mcp.tool(name="geo.place")
     async def geo_place(query: str, country: str | None = None, max_results: int = 3, ctx: Context = None):
